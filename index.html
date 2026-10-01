@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Island Simulator</title>
+<style>
+  :root {
+    --sea1:#2a7bb8; --sea2:#4aa3d4; --sand:#e8d6a3; --grass:#7bc86c;
+    --ink:#20323f; --panel:#ffffff; --panel2:#f4f7f9; --line:#d9e2e8;
+    --accent:#1f7a8c; --gold:#e6a817; --red:#d8544f; --green:#3fa34d;
+    --muted:#6b7c89;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:linear-gradient(160deg,#0d3b53,#145c73); color:var(--ink);
+    min-height:100vh;
+  }
+  header {
+    padding:14px 20px; color:#fff; display:flex; align-items:center; gap:14px;
+    flex-wrap:wrap;
+  }
+  header h1 { margin:0; font-size:22px; letter-spacing:.5px; }
+  header .day { font-size:14px; opacity:.85; }
+  .wrap { display:grid; grid-template-columns: 1fr 340px; gap:14px; padding:0 14px 20px; }
+  .wrap > div { min-width:0; } /* evita que el árbol ancho desborde el grid */
+  @media (max-width:980px){ .wrap{ grid-template-columns:1fr; } }
+  .card {
+    background:var(--panel); border-radius:14px; padding:14px;
+    box-shadow:0 6px 20px rgba(0,0,0,.18);
+  }
+  .card h2 { margin:0 0 10px; font-size:15px; color:var(--accent); }
+  /* Isla */
+  #island { width:100%; border-radius:12px; display:block; background:var(--sea1); }
+  .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  button {
+    background:var(--accent); color:#fff; border:none; border-radius:9px;
+    padding:9px 14px; font-size:14px; cursor:pointer; font-weight:600;
+  }
+  button:hover{ filter:brightness(1.08); }
+  button.ghost{ background:var(--panel2); color:var(--ink); border:1px solid var(--line); }
+  button.active{ background:var(--gold); }
+  .stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .stat { background:var(--panel2); border-radius:10px; padding:8px 10px; }
+  .stat .v { font-size:20px; font-weight:700; }
+  .stat .l { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+  .pill { font-size:11px; padding:2px 7px; border-radius:20px; font-weight:700; }
+  .up{ background:#fde7e6; color:var(--red); }
+  .down{ background:#e3f5e6; color:var(--green); }
+  .flat{ background:#eef2f4; color:var(--muted); }
+  /* Políticas */
+  .policy label { display:block; font-size:13px; margin:10px 0 3px; font-weight:600; }
+  .policy .row { display:flex; align-items:center; gap:10px; }
+  .policy input[type=range]{ flex:1; }
+  .policy .val { width:46px; text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
+  .hint{ font-size:11px; color:var(--muted); margin-top:2px; }
+  /* Log */
+  #log { font-size:12px; line-height:1.5; max-height:170px; overflow:auto; }
+  #log div{ padding:2px 0; border-bottom:1px solid var(--line); }
+  /* Tabs */
+  .tabs{ display:flex; gap:6px; margin-bottom:10px; }
+  .tabs button{ flex:1; font-size:13px; padding:7px; }
+  .view{ display:none; } .view.show{ display:block; }
+  /* Árbol */
+  #tree { width:100%; overflow:auto; }
+  .tree-node rect{ rx:7; }
+  .legend{ display:flex; gap:12px; font-size:12px; margin-top:8px; flex-wrap:wrap; }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .dot{ width:11px; height:11px; border-radius:50%; display:inline-block; }
+  table.mini{ width:100%; border-collapse:collapse; font-size:12px; }
+  table.mini td{ padding:3px 4px; border-bottom:1px solid var(--line); }
+  canvas.chart{ width:100%; height:120px; display:block; background:var(--panel2); border-radius:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏝️ Island Simulator</h1>
+  <span class="day">Día <b id="dayNum">0</b> · <span id="season"></span></span>
+  <span style="flex:1"></span>
+  <div class="controls" style="margin:0">
+    <button id="stepBtn">▶ Avanzar día</button>
+    <button id="playBtn" class="ghost">⏩ Auto</button>
+    <button id="resetBtn" class="ghost">↺ Reiniciar</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- Columna principal -->
+  <div style="display:flex; flex-direction:column; gap:14px;">
+    <div class="card">
+      <h2>La isla</h2>
+      <svg id="island" viewBox="0 0 800 420" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend">
+        <span><i class="dot" style="background:#7cc4e8"></i>Niño</span>
+        <span><i class="dot" style="background:#2e8b57"></i>Adulto</span>
+        <span><i class="dot" style="background:#9b7fb3"></i>Viejo</span>
+        <span>🏠 Vivienda &nbsp; 🔨 Construyendo</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tabs">
+        <button class="tab-btn active" data-view="markets">📈 Mercados</button>
+        <button class="tab-btn" data-view="tree">🌳 Árbol genealógico</button>
+        <button class="tab-btn" data-view="people">👥 Habitantes</button>
+      </div>
+
+      <div id="view-markets" class="view show">
+        <div class="stat-grid" style="margin-bottom:12px">
+          <div class="stat"><div class="l">Precio pescado</div><div class="v"><span id="priceFish"></span> <span id="fishInfl" class="pill flat"></span></div></div>
+          <div class="stat"><div class="l">Precio vivienda</div><div class="v"><span id="priceHouse"></span></div></div>
+          <div class="stat"><div class="l">Masa monetaria (M)</div><div class="v" id="money"></div></div>
+          <div class="stat"><div class="l">Caracolas impresas</div><div class="v" id="printed"></div></div>
+        </div>
+        <p class="hint" style="margin:0 0 4px">Precio del pescado (caracolas) y masa monetaria en el tiempo</p>
+        <canvas id="chartPrice" class="chart"></canvas>
+        <p class="hint" style="margin:10px 0 4px">Población y stock de pescado en la lonja</p>
+        <canvas id="chartPop" class="chart"></canvas>
+      </div>
+
+      <div id="view-tree" class="view">
+        <div id="tree"></div>
+      </div>
+
+      <div id="view-people" class="view">
+        <table class="mini"><thead><tr>
+          <td><b>Nombre</b></td><td><b>Edad</b></td><td><b>Etapa</b></td>
+          <td><b>Caracolas</b></td><td><b>Estado</b></td>
+        </tr></thead><tbody id="peopleBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Columna lateral -->
+  <div style="display:flex; flex-direction:column; gap:14px;">
+    <div class="card">
+      <h2>Población</h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="l">Habitantes</div><div class="v" id="pop"></div></div>
+        <div class="stat"><div class="l">Lonja (pescado)</div><div class="v" id="stock"></div></div>
+        <div class="stat"><div class="l">Niños / Adultos / Viejos</div><div class="v" id="ages" style="font-size:16px"></div></div>
+        <div class="stat"><div class="l">Viviendas (libres)</div><div class="v" id="houses"></div></div>
+      </div>
+    </div>
+
+    <div class="card policy">
+      <h2>Medidas del gobierno</h2>
+      <label>💰 Pensión a los viejos <span class="hint">(caracolas/día)</span></label>
+      <div class="row"><input type="range" id="pension" min="0" max="10" step="0.5" value="0"><span class="val" id="pensionV">0</span></div>
+
+      <label>🧺 Renta universal (RBU) <span class="hint">(caracolas/día a todos)</span></label>
+      <div class="row"><input type="range" id="ubi" min="0" max="10" step="0.5" value="0"><span class="val" id="ubiV">0</span></div>
+
+      <label>🔨 Esfuerzo en construir viviendas</label>
+      <div class="row"><input type="range" id="builders" min="0" max="0.5" step="0.05" value="0.15"><span class="val" id="buildersV">15%</span></div>
+
+      <p class="hint" style="margin-top:12px">
+        Imprimir caracolas (pensión/RBU) sin que crezca la pesca sube la masa
+        monetaria y provoca <b>inflación</b>. Si crece la producción con dinero
+        fijo, aparece <b>deflación</b>. Prueba a subir la RBU y mira el precio.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Crónica de la isla</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -5,9 +5,31 @@ tiene que prosperar. El objetivo educativo es tocar conceptos de economía
 —**inflación / deflación**, oferta y demanda, política fiscal y monetaria, banca,
 recursos naturales y pobreza— de forma visual y jugable.
 
-Cada **turno = 1 año**. Pulsa *Avanzar año* o activa *Auto* y observa cómo
-evoluciona la isla. Con *Atrás / Adelante* puedes revisar años pasados
-(solo lectura).
+Cada **turno = 1 año**. Pulsa *Avanzar año*, *+10 años* o activa *Auto* y
+observa cómo evoluciona la isla. Con *Atrás / Adelante* puedes revisar años
+pasados (solo lectura).
+
+## Escenarios
+
+Al abrir el juego eliges un escenario. Cada uno enseña **una sola idea**: solo
+muestra sus controles y sus indicadores clave, y tiene una misión. El resto de
+datos está a mano con «🔬 Ver todos los datos». Los escenarios guiados usan un
+clima estable (sin estaciones ni sequías) para que solo se vea el efecto de tus
+medidas.
+
+| Escenario | Tipo | Controles | Lección |
+|---|---|---|---|
+| 🏝️ Primeros pasos | Tutorial | — | Pesca, lonja, precio y crecimiento de la isla |
+| 🖨️ La imprenta | Experimento | Renta universal, imprimir | Imprimir dinero → inflación; no crea riqueza |
+| 🎣 El mar | Reto | Cuota de pesca | Tragedia de los comunes |
+| 👴 Las pensiones | Reto | Pensión, impuesto, jubilación | Envejecimiento: ninguna medida sola basta |
+| 🏦 El banco | Reto | Tipo de interés | Tipos altos → sin casa → menos hijos |
+| 🧭 Isla libre | Sandbox | Todos | Todo a la vez, con clima real |
+
+Al terminar cada escenario se explica qué ha pasado, con los números de tu
+partida. Los escenarios están definidos en `scenarios.js`: fase de acción
+(«haz esto»), de espera («deja pasar N años») o de objetivo (condiciones que se
+deben cumplir siempre o al final).
 
 ## Cómo ejecutar
 
@@ -61,7 +83,7 @@ Y abre <http://localhost:8123>.
   lonja o **compra lo que le falta**. Los viejos viven de sus ahorros, de la
   pensión, de la renta universal o de la ayuda de sus hijos.
 - Los pescadores no esquilman el mar para nada: pescan lo que su familia
-  necesita y lo que el mercado se llevó el año anterior.
+  necesita y lo que la gente necesitó comprar el año anterior.
 - **El precio sale de la oferta y la demanda**: si las familias quieren comprar
   más pescado del que hay en la lonja, sube; si sobra, baja. Quien tiene ahorros
   de sobra gasta parte en pescado extra, así que **más dinero en los bolsillos =
@@ -86,7 +108,8 @@ Y abre <http://localhost:8123>.
   pueden, se casan igual y **viven con sus padres** hasta conseguirla.
 - **Natalidad**: la mujer de la familia, si es fértil (menos de 45 años), puede
   tener hijos si la familia **no es pobre ni pasa hambre**; el ahorro y tener
-  casa propia la hacen más probable.
+  casa propia la hacen más probable. Si la isla se acerca a su límite de comida
+  (por brazos o por cuota de pesca), nacen menos niños.
 - **Hambre**: dentro de una familia comen antes los niños, luego los adultos y
   por último los viejos. Quien pasa 3 años seguidos sin comer lo suficiente muere.
 - **Inmigración**: si la isla tiene casas libres, el mar sano y poca pobreza,
@@ -109,7 +132,8 @@ Y abre <http://localhost:8123>.
 |---|---|
 | `index.html` | Estructura y estilos de la interfaz. |
 | `engine.js`  | Motor de simulación (economía + demografía). Sin UI. |
-| `app.js`     | Render de la isla, gráficas, pirámide, árbol y controles. |
+| `scenarios.js` | Escenarios guiados: misiones, indicadores clave y lecciones. Sin UI. |
+| `app.js`     | Render de la isla, misión, gráficas, pirámide, árbol y controles. |
 
 Todos los parámetros ajustables están en el objeto `CFG` al principio de
 `engine.js`.

@@ -3,16 +3,24 @@
  * ==========================================================================*/
 (function () {
 const { newWorld, step, stage, need, fullName, alive, totalMoney, walletOf, hhOf, setRetireAge, CFG } = window.Island;
+const SC = window.Scenarios;
 
 const $ = id => document.getElementById(id);
 const fmt = n => (Math.round(n * 10) / 10).toLocaleString("es-ES");
 const fmt0 = n => Math.round(n).toLocaleString("es-ES");
 
 // liveWorld = la simulación; world = lo que se MUESTRA (puede ser una instantánea
-// del pasado, de solo lectura). timeline guarda una copia por día para rebobinar.
+// del pasado, de solo lectura). timeline guarda una copia por año para rebobinar.
 let liveWorld, world;
 let timeline = [], cursor = 0;
 let playing = false, timer = null;
+let scn = null; // escenario actual
+
+// Preferencias del jugador en este navegador (escenarios superados)
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("island." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem("island." + k, JSON.stringify(v)); } catch (e) { /* sin almacenamiento */ } },
+};
 
 const snap = () => JSON.parse(JSON.stringify(liveWorld));
 const viewingPast = () => cursor < timeline.length - 1;
@@ -36,33 +44,66 @@ function readSetup() {
   };
   return { children: num("initChildren", 4), adults: num("initAdults", 10), olds: num("initOlds", 2) };
 }
-function startNewGame() {
-  liveWorld = newWorld(readSetup());
-  syncSliders();                       // aplicar los valores actuales de política
+function startScenario(id) {
+  scn = SC.byId(id) || SC.SCENARIOS[0];
+  store.set("scn", scn.id);
+  // cada escenario empieza con sus medidas (la isla libre, con las de por defecto)
+  liveWorld = newWorld(scn.free ? readSetup() : scn.setup);
+  policyToUI();
+  SC.start(scn, liveWorld);
   timeline = [snap()]; cursor = 0; world = liveWorld;
   stopPlay();
+  closeModals();
+  applyLayout();
   render();
 }
-function doStep() {
-  if (viewingPast()) { gotoCursor(timeline.length - 1); return; } // volver al presente
+
+// Un año de simulación + evaluación de la misión. Devuelve true si la misión acaba.
+function simYear() {
   step(liveWorld);
+  const ended = handleEvents(SC.update(scn, liveWorld, true));
   recordSnapshot();
+  return ended || alive(liveWorld).length === 0;
+}
+function advance(n) {
+  if (viewingPast()) { gotoCursor(timeline.length - 1); return; } // volver al presente
+  for (let i = 0; i < n; i++) if (simYear()) break;
   render();
 }
-$("stepBtn").onclick = doStep;
-$("resetBtn").onclick = startNewGame;
-$("newGameBtn").onclick = startNewGame;
+function handleEvents(events) {
+  let ended = false;
+  for (const e of events) {
+    if (e.type === "phase") flash($("missionCard"));
+    if (e.type === "won" || e.type === "lost") {
+      ended = true;
+      stopPlay();
+      if (e.type === "won") { const d = store.get("done", []); if (!d.includes(scn.id)) store.set("done", [...d, scn.id]); }
+      setTimeout(() => { render(); showResult(); }, 50);
+    }
+  }
+  return ended;
+}
+function flash(el) {
+  el.animate([{ boxShadow: "0 0 0 4px #e6a817" }, { boxShadow: "0 6px 20px rgba(0,0,0,.18)" }], { duration: 900 });
+}
+
+$("stepBtn").onclick = () => advance(1);
+$("step10Btn").onclick = () => advance(10);
+$("resetBtn").onclick = () => startScenario(scn.id);
+$("newGameBtn").onclick = () => startScenario("free");
 $("playBtn").onclick = () => playing ? stopPlay() : startPlay();
 $("backBtn").onclick = () => { stopPlay(); gotoCursor(cursor - 1); };
 $("fwdBtn").onclick = () => gotoCursor(cursor + 1);
 $("presentBtn").onclick = () => gotoCursor(timeline.length - 1);
+$("scnBtn").onclick = () => { stopPlay(); showScenarioPicker(); };
+$("showAll").onchange = () => { applyLayout(); render(); };
 
 function startPlay() {
   if (viewingPast()) gotoCursor(timeline.length - 1); // reanudar en el presente
   playing = true; $("playBtn").classList.add("active"); $("playBtn").textContent = "⏸ Pausa";
   timer = setInterval(() => {
-    step(liveWorld); recordSnapshot(); render();
-    if (alive(liveWorld).length === 0) stopPlay();
+    const ended = simYear(); render();
+    if (ended) stopPlay();
   }, 450);
 }
 function stopPlay() {
@@ -71,7 +112,12 @@ function stopPlay() {
 }
 
 // Sliders de política (siempre actúan sobre la simulación viva)
-const sliderUpdaters = [];
+const controlDefs = []; // { id, key, type, fmtFn } para volcar la política a la UI
+function onPolicyChange() {
+  if (!liveWorld || !scn) return;
+  handleEvents(SC.update(scn, liveWorld, false)); // p. ej. «activa la imprenta»
+  if (!viewingPast()) renderMission();
+}
 function bindSlider(id, key, fmtFn) {
   const el = $(id);
   const upd = () => {
@@ -79,16 +125,51 @@ function bindSlider(id, key, fmtFn) {
     if (liveWorld) liveWorld.policy[key] = v;
     $(id + "V").textContent = fmtFn(v);
   };
-  el.oninput = upd;
-  sliderUpdaters.push(upd);
+  el.oninput = () => { upd(); onPolicyChange(); };
+  controlDefs.push({ id, key, type: "range", fmtFn });
 }
 function bindCheckbox(id, key) {
   const el = $(id);
   const upd = () => { if (liveWorld) liveWorld.policy[key] = el.checked; };
-  el.onchange = upd;
-  sliderUpdaters.push(upd);
+  el.onchange = () => { upd(); onPolicyChange(); };
+  controlDefs.push({ id, key, type: "check" });
 }
-function syncSliders() { sliderUpdaters.forEach(u => u()); }
+// Poner los controles con los valores de la política del mundo (al empezar un escenario)
+function policyToUI() {
+  for (const c of controlDefs) {
+    const v = liveWorld.policy[c.key];
+    if (c.type === "check") $(c.id).checked = !!v;
+    else { $(c.id).value = v; $(c.id + "V").textContent = c.fmtFn(v); }
+  }
+}
+
+// --- Qué se ve en cada escenario ---------------------------------------------
+function applyLayout() {
+  const all = scn.controls === "all";
+  let anyCtl = false;
+  document.querySelectorAll(".ctl").forEach(el => {
+    const show = all || scn.controls.includes(el.dataset.ctl);
+    el.classList.toggle("hidden", !show);
+    anyCtl = anyCtl || show;
+  });
+  let first = true;
+  document.querySelectorAll(".grp").forEach(g => {
+    const vis = g.querySelector(".ctl:not(.hidden)");
+    g.classList.toggle("hidden", !vis);
+    g.classList.toggle("first", !!vis && first);
+    if (vis) first = false;
+  });
+  $("noControls").classList.toggle("hidden", anyCtl);
+  // en los escenarios guiados solo se ve lo esencial; el resto, a petición
+  const showAll = scn.free || $("showAll").checked;
+  $("showAllWrap").classList.toggle("hidden", !!scn.free);
+  $("allData").classList.toggle("hidden", !showAll);
+  document.querySelectorAll(".extra").forEach(el => el.classList.toggle("hidden", !showAll));
+  $("treasuryCard").classList.toggle("hidden", !(showAll || scn.kpis.includes("treasury")));
+  $("setupCard").classList.toggle("hidden", !scn.free);
+  $("kpiLegend").innerHTML = scn.chart.map(([, label, color]) =>
+    `<span><i class="key" style="background:${color}"></i>${label}</span>`).join("");
+}
 bindSlider("tax", "tax", v => Math.round(v) + "%");
 bindSlider("pension", "pension", v => fmt(v));
 bindSlider("ubi", "ubi", v => fmt(v));
@@ -200,11 +281,125 @@ function render() {
   $("fwdBtn").style.opacity = past ? 1 : 0.5;
   $("presentBtn").style.opacity = past ? 1 : 0.5;
 
+  renderMission();
+  renderKpis();
   drawIsland();
   drawCharts();
   if ($("view-pyramid").classList.contains("show")) drawPyramid();
   if ($("view-tree").classList.contains("show")) drawTree();
   if ($("view-people").classList.contains("show")) drawPeople();
+}
+
+// --- Misión del escenario ---------------------------------------------------
+function renderMission() {
+  const w = world, m = w.mission;
+  if (!scn || !m) return;
+  $("mIcon").textContent = scn.icon;
+  $("mTitle").textContent = scn.title;
+  $("mLesson").textContent = `${scn.level} · ${scn.lesson}`;
+  $("mIntro").innerHTML = scn.intro;
+
+  let task = "";
+  if (m.status === "free") {
+    task = `<div class="lbl">🧭 Sin objetivo</div>Experimenta: cambia una medida cada vez y
+      mira qué pasa en los indicadores. Con <b>⏮</b> puedes volver atrás y comparar.`;
+  } else if (m.status === "running") {
+    const ph = scn.phases[m.phase];
+    const pr = SC.progress(scn, w);
+    task = `<div class="lbl">🎯 Tu misión · paso ${m.phase + 1} de ${scn.phases.length}</div>${ph.text}`;
+    if (ph.type === "wait" && ph.keep && !ph.keep(w)) task += `<p class="bad" style="margin:6px 0 0">⚠️ ${ph.keepHint}</p>`;
+    if (ph.type !== "action") {
+      task += `<div class="bar"><i style="width:${Math.round(Math.min(1, pr.frac) * 100)}%"></i></div><div class="bar-l">${pr.label}</div>`;
+    }
+    if (ph.type === "goal") {
+      const el = w.day - m.phaseStart;
+      task += `<ul class="conds">` + ph.conds.map(c => {
+        const ok = c.test(w);
+        const pending = c.kind === "always" && el < (c.from || 0);
+        const icon = ok ? "✅" : (pending || c.kind === "end" ? "⏳" : "❌");
+        return `<li><span>${icon}</span><span>${c.text}</span><span class="cv ${ok ? "good" : "bad"}">${c.value(w)}</span></li>`;
+      }).join("") + `</ul>`;
+    }
+  } else {
+    const won = m.status === "won";
+    const experiment = scn.phases.every(p => p.type !== "goal");
+    task = `<div class="lbl">${won ? "🏁 Terminado" : "❌ Fallido"}</div>
+      <div class="m-result ${won ? "won" : "lost"}">${won ? (experiment ? "🎓 Experimento completado" : "🏆 ¡Objetivo cumplido!") : "😞 " + m.failMsg}</div>
+      <div class="m-actions">
+        <button class="small" id="mSeeBtn">📘 Ver la lección</button>
+        <button class="small ghost" id="mRetryBtn">↺ Reintentar</button>
+        ${nextScenario() ? `<button class="small ghost" id="mNextBtn">➡ ${nextScenario().title}</button>` : ""}
+      </div>`;
+  }
+  $("mTask").innerHTML = task;
+  if ($("mSeeBtn")) $("mSeeBtn").onclick = showResult;
+  if ($("mRetryBtn")) $("mRetryBtn").onclick = () => startScenario(scn.id);
+  if ($("mNextBtn")) $("mNextBtn").onclick = () => startScenario(nextScenario().id);
+
+  // lo aprendido en los pasos ya completados (el último, arriba)
+  const done = m.done.filter(d => d.explain);
+  $("mDone").innerHTML = done.length
+    ? `<b>📘 Lo que ha pasado</b>` + done.slice().reverse().map(d => `<div class="step">${d.explain}</div>`).join("")
+    : "";
+}
+
+function nextScenario() {
+  const i = SC.SCENARIOS.indexOf(scn);
+  return SC.SCENARIOS[i + 1] || null;
+}
+
+// --- Indicadores clave ------------------------------------------------------
+function renderKpis() {
+  const w = world;
+  if (!scn) return;
+  $("kpis").innerHTML = scn.kpis.map(k => {
+    const d = SC.KPIS[k];
+    const bad = d.bad && d.bad(w);
+    return `<div class="stat ${bad ? "bad" : ""}"><div class="l">${d.label}</div><div class="v">${d.value(w)}</div>
+      <div class="s">${d.sub ? d.sub(w) : ""}</div></div>`;
+  }).join("");
+  const h = w.history;
+  if (h.length) lineChart($("chartKpi"), scn.chart.map(([key]) => h.map(d => d[key] || 0)), scn.chart.map(c => c[2]));
+  else $("chartKpi").getContext("2d").clearRect(0, 0, $("chartKpi").width, $("chartKpi").height);
+}
+
+// --- Modales: selector de escenarios y resultado ----------------------------
+function closeModals() { $("scnModal").classList.add("hidden"); $("resultModal").classList.add("hidden"); }
+function showScenarioPicker() {
+  const done = store.get("done", []);
+  $("scnGrid").innerHTML = SC.SCENARIOS.map(s => `
+    <button class="scn" data-id="${s.id}">
+      <span class="ic">${s.icon}</span>
+      <span class="t">${s.title}</span>
+      <span class="le">${s.lesson}</span>
+      <span class="lv"><span>${s.level}</span>${done.includes(s.id) ? `<span class="ok">✔ superado</span>` : ""}</span>
+    </button>`).join("");
+  $("scnGrid").querySelectorAll(".scn").forEach(b => { b.onclick = () => startScenario(b.dataset.id); });
+  $("scnModal").classList.remove("hidden");
+}
+$("scnModal").onclick = e => { if (e.target === $("scnModal") && scn) closeModals(); };
+$("resultModal").onclick = e => { if (e.target === $("resultModal")) closeModals(); };
+
+function showResult() {
+  const w = world, m = w.mission;
+  if (!m || (m.status !== "won" && m.status !== "lost")) return;
+  const won = m.status === "won";
+  const experiment = scn.phases.every(p => p.type !== "goal");
+  $("rIcon").textContent = won ? (experiment ? "🎓" : "🏆") : "😞";
+  $("rTitle").textContent = won ? (experiment ? `${scn.title}: experimento completado` : `${scn.title}: ¡objetivo cumplido!`) : `${scn.title}: no lo has conseguido`;
+  $("rSub").textContent = won ? `Año ${m.endDay}. Lo que has aprendido:` : m.failMsg;
+  $("rBody").innerHTML = scn.conclusion ? scn.conclusion(w, m) : "";
+  const nx = nextScenario();
+  $("rActions").innerHTML = `
+    ${nx ? `<button id="rNext">➡ Siguiente: ${nx.icon} ${nx.title}</button>` : ""}
+    <button class="ghost" id="rRetry">↺ Reintentar</button>
+    <button class="ghost" id="rMenu">🗺️ Escenarios</button>
+    <button class="ghost" id="rStay">👁 Seguir mirando la isla</button>`;
+  if (nx) $("rNext").onclick = () => startScenario(nx.id);
+  $("rRetry").onclick = () => startScenario(scn.id);
+  $("rMenu").onclick = () => { closeModals(); showScenarioPicker(); };
+  $("rStay").onclick = closeModals;
+  $("resultModal").classList.remove("hidden");
 }
 
 // --- Isla (SVG) -------------------------------------------------------------
@@ -532,7 +727,8 @@ function drawTree() {
 
 function esc(s) { return String(s).replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c])); }
 
-// Iniciar la primera partida
-startNewGame();
+// Iniciar: el último escenario jugado (o el tutorial) y el menú de escenarios
+startScenario(store.get("scn", "intro"));
+showScenarioPicker();
 window.__world = () => world; // depuración
 })();

@@ -339,6 +339,12 @@ function newWorld(setup) {
   const spare = Math.max(4, Math.round(nAdults * 0.8) + nOlds);
   for (let i = 0; i < spare; i++) addHouse();
 
+  // Condiciones iniciales de un escenario (política de partida, mar, tesoro)
+  if (cfg.policy) Object.assign(w.policy, cfg.policy);
+  if (cfg.seaFrac != null) w.seaFish = CFG.SEA_CAPACITY * cfg.seaFrac;
+  if (cfg.treasury != null) w.treasury = cfg.treasury;
+  if (cfg.stableClimate) w.stableClimate = true;
+
   computeStats(w, { hungerDeaths: 0, hungry: 0, taxes: 0, printed: 0, fromTreasury: 0 });
   return w;
 }
@@ -372,7 +378,11 @@ function step(w) {
   }
 
   // --- 2. Clima: abundancia de pesca ---------------------------------------
-  if (w.drought > 0) {
+  if (w.stableClimate) {
+    // escenarios guiados: sin estaciones ni sequías, para ver solo el efecto
+    // de las medidas del jugador
+    w.abundance = 1;
+  } else if (w.drought > 0) {
     w.drought--;
     w.abundance = 0.6;
   } else {
@@ -439,7 +449,9 @@ function step(w) {
     prodByHH.get(x.p.householdId).push(x);
   }
   const totalCapacity = producers.reduce((s, x) => s + x.cap, 0);
-  const marketWanted = Math.max(0, w.marketD * 1.05 - w.fishStock);
+  // Se pesca para lo que la gente NECESITA comprar (no solo para lo que pudo
+  // pagar el año pasado): si el precio sube, se pesca más, no menos.
+  const marketWanted = Math.max(0, (w.marketNeed != null ? w.marketNeed : w.marketD) * 1.05 - w.fishStock);
   let todaysCatch = 0, targetSum = 0;
   const catchByPerson = new Map();
   for (const [hid, list] of prodByHH) {
@@ -468,6 +480,10 @@ function step(w) {
     todaysCatch = catchable;
   }
   w.effort = effort;
+  // margen de comida: cuánto más se PODRÍA pescar (por brazos y por cuota) que lo
+  // que se necesita. Si se acerca a 1, la isla está en su límite y las familias,
+  // al ver que escasea, tienen menos hijos.
+  w.foodRoom = demandToday > 0 ? Math.min(totalCapacity, catchable) / demandToday : 2;
   w.fishStock *= (1 - CFG.SPOIL_RATE);   // el pescado almacenado se estropea
   w.seaFish -= todaysCatch;
   w.lastCatch = todaysCatch;
@@ -570,12 +586,14 @@ function step(w) {
   //     falta a las familias + consumo extra de quien tiene ahorros de sobra)
   w.fishStock += totalSurplus;
   const S = w.fishStock;
-  let D = 0;
+  let D = 0, needQ = 0;
   for (const hh of w.households) {
     const spare = Math.max(0, hh.wallet - reserveOf(hh));
     hh._extra = spare * CFG.SPEND_RICH / pPrev;
     D += Math.min(hh._deficit + hh._extra, hh.wallet / pPrev);
+    needQ += hh._deficit + hh._extra;
   }
+  w.marketNeed = needQ;
   // 7.4 el precio sube si se quiere comprar más de lo que hay, y baja si sobra
   const ratio = S > 0.01 ? D / S : (D > 0 ? 4 : 1);
   const factor = clamp(Math.pow(ratio, 0.4), 1 - CFG.PRICE_MAX_STEP, 1 + CFG.PRICE_MAX_STEP);
@@ -675,6 +693,14 @@ function step(w) {
     prodPerCap: s.prodPerCap,
     wealthPerCap: s.wealthPerCap,
     poverty: s.povertyRate,
+    hunger10: s.hungerDeaths10,
+    births10: s.births10,
+    welfareCut: w.welfareCut,
+    ubiReal: w.policy.ubi / w.priceFish,
+    pensionReal: w.policy.pension / w.priceFish,
+    noHouse: w.households.filter(h => !h.houseId && h.fatherId && h.motherId).length,
+    olds: alive(w).filter(p => stage(p) === "old").length,
+    workers: alive(w).filter(p => stage(p) === "adult").length,
   });
   if (w.history.length > 400) w.history.shift();
   return w;
@@ -719,6 +745,9 @@ function computeStats(w, T) {
   }
   w.hungerLog.push(T.hungerDeaths);
   if (w.hungerLog.length > 10) w.hungerLog.shift();
+  w.birthLog = w.birthLog || [];
+  w.birthLog.push(w.birthsYear || 0); w.birthsYear = 0;
+  if (w.birthLog.length > 10) w.birthLog.shift();
   const back = w.history.length >= 10 ? w.history[w.history.length - 10].priceFish : null;
   w.stats = {
     prodPerCap: w.lastCatch / pop,                                   // 🐟/hab producidos este año
@@ -726,6 +755,7 @@ function computeStats(w, T) {
     gini: gini(wealthFish.map(v => Math.max(0, v))),
     povertyRate: (poor / pop) * 100,
     hungerDeaths10: w.hungerLog.reduce((a, b) => a + b, 0),
+    births10: w.birthLog.reduce((a, b) => a + b, 0),
     inflation10: back ? ((price / back) - 1) * 100 : 0,
     taxes: T.taxes, printed: T.printed, fromTreasury: T.fromTreasury,
   };
@@ -910,6 +940,10 @@ function births(w) {
   // empobrecen y nacen menos niños: la economía regula la población.
   const price = w.priceFish;
   const workBonus = w.policy.womenWork ? 1 : CFG.NONWORK_BIRTH_BONUS;
+  // si la isla está cerca de su límite de comida, nacen menos niños
+  const room = w.foodRoom != null ? w.foodRoom : 2;
+  const scarcity = clamp((room - 1) / 0.3, 0, 1);
+  if (scarcity <= 0) return;
   for (const hh of [...w.households]) {
     const mom = hh.motherId ? w.people.find(x => x.id === hh.motherId) : null;
     const dad = hh.fatherId ? w.people.find(x => x.id === hh.fatherId) : null;
@@ -929,7 +963,7 @@ function births(w) {
     const savings = hh.wallet + (hh.deposit || 0);
     const prosperity = clamp(savings / (price * famNeed * CFG.PROSPERITY_YEARS), 0, 1);
     const houseFactor = hh.houseId ? 1 : CFG.NOHOUSE_BIRTH_FACTOR;
-    if (Math.random() < CFG.BIRTH_CHANCE * (0.5 + 0.5 * prosperity) * workBonus * houseFactor) {
+    if (Math.random() < CFG.BIRTH_CHANCE * (0.5 + 0.5 * prosperity) * workBonus * houseFactor * scarcity) {
       const child = makePerson({
         age: 0,
         parents: [dad.id, mom.id],
@@ -938,6 +972,7 @@ function births(w) {
       dad.childrenIds.push(child.id);
       mom.childrenIds.push(child.id);
       mom.lastBirthDay = w.day;
+      w.birthsYear = (w.birthsYear || 0) + 1;
       w.people.push(child);
       addToHousehold(hh, child);
       logMsg(w, `👶 Nace ${fullName(child)}.`);

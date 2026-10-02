@@ -23,14 +23,18 @@
   }
   header h1 { margin:0; font-size:22px; letter-spacing:.5px; }
   header .day { font-size:14px; opacity:.85; }
-  .wrap { display:grid; grid-template-columns: 1fr 360px; gap:14px; padding:0 14px 20px; }
+  .wrap { display:grid; grid-template-columns: 1fr 380px; gap:14px; padding:0 14px 20px; }
   .wrap > div { min-width:0; } /* evita que el árbol ancho desborde el grid */
   @media (max-width:980px){ .wrap{ grid-template-columns:1fr; } }
+  .col { display:flex; flex-direction:column; gap:14px; }
   .card {
     background:var(--panel); border-radius:14px; padding:14px;
     box-shadow:0 6px 20px rgba(0,0,0,.18);
   }
   .card h2 { margin:0 0 10px; font-size:15px; color:var(--accent); }
+  .card h2.row { display:flex; align-items:center; gap:8px; }
+  .card h2.row .grow { flex:1; }
+  .hidden { display:none !important; }
   /* Isla */
   #island { width:100%; border-radius:12px; display:block; background:var(--sea1); }
   .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
@@ -39,16 +43,22 @@
     padding:9px 14px; font-size:14px; cursor:pointer; font-weight:600;
   }
   button:hover{ filter:brightness(1.08); }
+  button:disabled{ opacity:.5; cursor:default; filter:none; }
   button.ghost{ background:var(--panel2); color:var(--ink); border:1px solid var(--line); }
   button.active{ background:var(--gold); }
+  button.small{ padding:5px 10px; font-size:12px; }
   .stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
   .stat-grid.three { grid-template-columns:repeat(3,1fr); }
+  .stat-grid.four { grid-template-columns:repeat(4,1fr); }
+  @media (max-width:760px){ .stat-grid.four{ grid-template-columns:repeat(2,1fr); } }
   @media (max-width:560px){ .stat-grid.three{ grid-template-columns:repeat(2,1fr); } }
   .stat { background:var(--panel2); border-radius:10px; padding:8px 10px; }
   .stat .v { font-size:20px; font-weight:700; }
   .stat .v.sm { font-size:16px; }
   .stat .l { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
   .stat .s { font-size:11px; color:var(--muted); margin-top:2px; }
+  .stat.bad { background:#fde7e6; }
+  .stat.bad .v { color:var(--red); }
   .pill { font-size:11px; padding:2px 7px; border-radius:20px; font-weight:700; }
   .up{ background:#fde7e6; color:var(--red); }
   .down{ background:#e3f5e6; color:var(--green); }
@@ -63,7 +73,8 @@
   .policy .check { display:flex; align-items:center; gap:8px; cursor:pointer; }
   .policy .check input { width:16px; height:16px; cursor:pointer; }
   .policy h3 { margin:16px 0 2px; font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); border-top:1px solid var(--line); padding-top:10px; }
-  .policy h3:first-of-type { border-top:none; padding-top:0; margin-top:4px; }
+  .policy .grp:not(.hidden) ~ .grp:not(.hidden) h3 { }
+  .policy .grp.first h3 { border-top:none; padding-top:0; margin-top:4px; }
   .hint{ font-size:11px; color:var(--muted); margin-top:2px; }
   .setup-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
   .setup-grid label{ font-size:12px; font-weight:600; display:flex; flex-direction:column; gap:4px; }
@@ -90,23 +101,70 @@
   table.mini{ width:100%; border-collapse:collapse; font-size:12px; }
   table.mini td{ padding:3px 4px; border-bottom:1px solid var(--line); }
   canvas.chart{ width:100%; height:120px; display:block; background:var(--panel2); border-radius:8px; }
+  canvas.chart.tall{ height:150px; }
   .chart-legend{ display:flex; gap:12px; font-size:11px; color:var(--muted); margin:10px 0 4px; flex-wrap:wrap; }
   .chart-legend span{ display:inline-flex; align-items:center; gap:5px; }
   .explain{ font-size:12px; line-height:1.5; background:#eef6f8; border-left:3px solid var(--accent); padding:8px 10px; border-radius:6px; margin-top:12px; }
+  .toggle{ font-size:12px; font-weight:600; color:var(--muted); display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+  /* Misión */
+  #missionCard { border-top:5px solid var(--gold); }
+  .m-head{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .m-icon{ font-size:30px; line-height:1; }
+  .m-title{ font-size:17px; font-weight:800; }
+  .m-lesson{ font-size:12px; color:var(--muted); }
+  .m-intro{ font-size:13px; line-height:1.5; margin:6px 0 10px; }
+  .m-task{ background:#fff7e0; border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.45; }
+  .m-task .lbl{ font-size:11px; font-weight:800; color:#a07400; text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px; }
+  .bar{ height:8px; background:#efe3bf; border-radius:6px; overflow:hidden; margin-top:8px; }
+  .bar > i{ display:block; height:100%; background:var(--gold); width:0; transition:width .3s; }
+  .bar-l{ font-size:11px; color:#8a6a10; margin-top:3px; text-align:right; }
+  ul.conds{ list-style:none; padding:0; margin:8px 0 0; font-size:12.5px; }
+  ul.conds li{ display:flex; gap:6px; padding:3px 0; align-items:baseline; }
+  ul.conds li .cv{ margin-left:auto; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .m-done{ font-size:12.5px; line-height:1.5; margin-top:10px; }
+  .m-done .step{ background:#eef6f8; border-left:3px solid var(--accent); padding:7px 10px; border-radius:6px; margin-top:6px; }
+  .m-result{ margin-top:10px; padding:10px 12px; border-radius:10px; font-size:13px; font-weight:700; }
+  .m-result.won{ background:#e3f5e6; color:#22702e; }
+  .m-result.lost{ background:#fde7e6; color:#a3302b; }
+  .m-actions{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  /* Modales */
+  .modal{ position:fixed; inset:0; background:rgba(8,30,44,.72); display:flex; align-items:flex-start; justify-content:center;
+    padding:40px 16px; overflow:auto; z-index:50; }
+  .modal .box{ background:#fff; border-radius:16px; max-width:860px; width:100%; padding:22px; box-shadow:0 20px 50px rgba(0,0,0,.35); }
+  .modal h2{ margin:0 0 4px; font-size:22px; }
+  .modal .sub{ color:var(--muted); font-size:14px; margin:0 0 16px; }
+  .scn-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
+  .scn{ text-align:left; background:var(--panel2); color:var(--ink); border:2px solid var(--line); border-radius:14px; padding:14px;
+    display:flex; flex-direction:column; gap:6px; font-weight:400; }
+  .scn:hover{ border-color:var(--accent); filter:none; background:#eef6f8; }
+  .scn .ic{ font-size:30px; }
+  .scn .t{ font-size:16px; font-weight:800; }
+  .scn .le{ font-size:13px; color:var(--accent); font-weight:700; }
+  .scn .lv{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; display:flex; justify-content:space-between; }
+  .scn .ok{ color:var(--green); font-weight:800; }
+  .result-box{ max-width:620px !important; }
+  .result-box .big{ font-size:44px; }
+  .result-box .body{ font-size:14px; line-height:1.55; }
+  table.cmp{ width:100%; border-collapse:collapse; font-size:13px; margin:6px 0 10px; }
+  table.cmp th, table.cmp td{ padding:5px 6px; border-bottom:1px solid var(--line); text-align:right; }
+  table.cmp th:first-child, table.cmp td:first-child{ text-align:left; }
+  table.cmp small{ color:var(--red); font-weight:700; }
 </style>
 </head>
 <body>
 <header>
   <h1>🏝️ Island Simulator</h1>
   <span class="day">Año <b id="dayNum">0</b> · <span id="season"></span></span>
+  <button id="scnBtn" class="ghost small">🗺️ Escenarios</button>
   <span style="flex:1"></span>
   <div class="controls" style="margin:0">
-    <button id="backBtn" class="ghost" title="Retroceder un año (solo lectura)">⏮ Atrás</button>
-    <button id="fwdBtn" class="ghost" title="Avanzar en el histórico">⏭ Adelante</button>
+    <button id="backBtn" class="ghost" title="Retroceder un año (solo lectura)">⏮</button>
+    <button id="fwdBtn" class="ghost" title="Avanzar en el histórico">⏭</button>
     <button id="presentBtn" class="ghost" title="Volver al presente">⦿ Presente</button>
     <button id="stepBtn">▶ Avanzar año</button>
+    <button id="step10Btn" class="ghost">⏭ +10 años</button>
     <button id="playBtn" class="ghost">⏩ Auto</button>
-    <button id="resetBtn" class="ghost">↺ Reiniciar</button>
+    <button id="resetBtn" class="ghost" title="Empezar de nuevo este escenario">↺</button>
   </div>
 </header>
 <div id="pastBanner" style="display:none; margin:0 14px 10px; padding:8px 14px; border-radius:10px; background:#fde8c2; color:#7a5a12; font-size:13px; font-weight:600;">
@@ -115,7 +173,7 @@
 
 <div class="wrap">
   <!-- Columna principal -->
-  <div style="display:flex; flex-direction:column; gap:14px;">
+  <div class="col">
     <div class="card">
       <h2>La isla</h2>
       <svg id="island" viewBox="0 0 800 420" preserveAspectRatio="xMidYMid meet"></svg>
@@ -127,7 +185,17 @@
       </div>
     </div>
 
-    <div class="card">
+    <!-- Indicadores clave del escenario -->
+    <div class="card" id="kpiCard">
+      <h2 class="row"><span class="grow">📌 Indicadores clave</span>
+        <label class="toggle" id="showAllWrap"><input type="checkbox" id="showAll"> 🔬 Ver todos los datos</label></h2>
+      <div class="stat-grid four" id="kpis"></div>
+      <div class="chart-legend" id="kpiLegend"></div>
+      <canvas id="chartKpi" class="chart tall"></canvas>
+      <p class="hint">Cada línea tiene su propia escala: fíjate en si sube o baja.</p>
+    </div>
+
+    <div class="card" id="allData">
       <div class="tabs">
         <button class="tab-btn active" data-view="markets">📈 Mercados</button>
         <button class="tab-btn" data-view="welfare">💚 Bienestar</button>
@@ -191,19 +259,95 @@
   </div>
 
   <!-- Columna lateral -->
-  <div style="display:flex; flex-direction:column; gap:14px;">
-    <div class="card">
-      <h2>Nueva partida</h2>
+  <div class="col">
+    <!-- Misión del escenario -->
+    <div class="card" id="missionCard">
+      <div class="m-head">
+        <span class="m-icon" id="mIcon"></span>
+        <div><div class="m-title" id="mTitle"></div><div class="m-lesson" id="mLesson"></div></div>
+      </div>
+      <div class="m-intro" id="mIntro"></div>
+      <div class="m-task" id="mTask"></div>
+      <div class="m-done" id="mDone"></div>
+      <div id="mResult"></div>
+    </div>
+
+    <div class="card policy" id="policyCard">
+      <h2>Medidas del gobierno</h2>
+      <p class="hint" id="noControls" style="font-size:12px">En este escenario solo observas: aún no tienes medidas que tomar.</p>
+
+      <div class="grp" data-grp="fiscal">
+        <h3>Impuestos y ayudas</h3>
+        <div class="ctl" data-ctl="tax">
+          <label>🧾 Impuesto sobre las ventas de la lonja</label>
+          <div class="row"><input type="range" id="tax" min="0" max="50" step="1" value="15"><span class="val" id="taxV">15%</span></div>
+          <p class="hint">Lo que se recauda va al tesoro, que paga pensiones, ayudas y obra pública.</p>
+        </div>
+        <div class="ctl" data-ctl="pension">
+          <label>💰 Pensión <span class="hint">(caracolas/año a cada viejo)</span></label>
+          <div class="row"><input type="range" id="pension" min="0" max="10" step="0.5" value="1"><span class="val" id="pensionV">1</span></div>
+        </div>
+        <div class="ctl" data-ctl="ubi">
+          <label>🧺 Renta universal <span class="hint">(caracolas/año a cada habitante)</span></label>
+          <div class="row"><input type="range" id="ubi" min="0" max="10" step="0.5" value="0"><span class="val" id="ubiV">0</span></div>
+        </div>
+        <div class="ctl" data-ctl="allowPrint">
+          <label class="check"><input type="checkbox" id="allowPrint"> 🖨️ Imprimir dinero si el tesoro no alcanza</label>
+          <p class="hint">Si no se permite, las ayudas y la obra pública se recortan cuando no hay dinero.</p>
+        </div>
+        <div class="ctl" data-ctl="shareSurplus">
+          <label class="check"><input type="checkbox" id="shareSurplus" checked> ♻️ Repartir el superávit del tesoro</label>
+          <p class="hint">El tesoro guarda una reserva y reparte el resto entre todos. Si no se reparte, el dinero se queda parado (deflación).</p>
+        </div>
+      </div>
+
+      <div class="grp" data-grp="bank">
+        <h3>Banco</h3>
+        <div class="ctl" data-ctl="interest">
+          <label>🏦 Tipo de interés de las hipotecas <span class="hint">(% anual)</span></label>
+          <div class="row"><input type="range" id="interest" min="0" max="20" step="0.5" value="3"><span class="val" id="interestV">3%</span></div>
+          <p class="hint">Lo pagan los hipotecados y lo cobran los ahorradores. Más alto → menos gente puede comprar casa.</p>
+        </div>
+      </div>
+
+      <div class="grp" data-grp="res">
+        <h3>Recursos</h3>
+        <div class="ctl" data-ctl="quota">
+          <label>🎣 Cuota de pesca <span class="hint">(% de los peces del mar al año)</span></label>
+          <div class="row"><input type="range" id="quota" min="1" max="30" step="1" value="8"><span class="val" id="quotaV">8%</span></div>
+          <p class="hint">Más cuota = más comida hoy, pero si el mar se esquilma, mañana habrá hambre.</p>
+        </div>
+      </div>
+
+      <div class="grp" data-grp="work">
+        <h3>Trabajo</h3>
+        <div class="ctl" data-ctl="retireAge">
+          <label>👴 Edad de jubilación</label>
+          <div class="row"><input type="range" id="retireAge" min="30" max="80" step="1" value="60"><span class="val" id="retireAgeV">60 años</span></div>
+          <p class="hint">A partir de esta edad ya no se trabaja y se cobra la pensión.</p>
+        </div>
+        <div class="ctl" data-ctl="womenWork">
+          <label class="check"><input type="checkbox" id="womenWork" checked> 👩‍🏭 Mujer trabajadora</label>
+          <p class="hint">Si se desactiva, las mujeres no pescan (marisquean para su casa): menos producción, más hijos.</p>
+        </div>
+        <div class="ctl" data-ctl="builders">
+          <label>🔨 Tope de constructores <span class="hint">(máx. % de adultos)</span></label>
+          <div class="row"><input type="range" id="builders" min="0" max="1" step="0.05" value="0.6"><span class="val" id="buildersV">60%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="setupCard">
+      <h2>Población inicial</h2>
       <div class="setup-grid">
         <label>👶 Niños<input type="number" id="initChildren" min="0" max="40" value="4"></label>
         <label>🧑 Adultos<input type="number" id="initAdults" min="0" max="60" value="10"></label>
         <label>🧓 Viejos<input type="number" id="initOlds" min="0" max="40" value="2"></label>
       </div>
-      <button id="newGameBtn" style="width:100%; margin-top:10px">🌱 Empezar partida</button>
-      <p class="hint" style="margin-top:6px">Define la población inicial. «Reiniciar» (arriba) usa estos mismos valores.</p>
+      <button id="newGameBtn" style="width:100%; margin-top:10px">🌱 Empezar con esta población</button>
     </div>
 
-    <div class="card">
+    <div class="card extra">
       <h2>Población y recursos</h2>
       <div class="stat-grid">
         <div class="stat"><div class="l">Habitantes</div><div class="v" id="pop"></div></div>
@@ -217,7 +361,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="treasuryCard">
       <h2>🏛️ Tesoro público</h2>
       <div class="stat-grid" style="margin-bottom:8px">
         <div class="stat"><div class="l">Saldo del tesoro</div><div class="v" id="treasury"></div></div>
@@ -227,40 +371,6 @@
       <p class="hint" id="cutNote" style="margin-top:6px"></p>
     </div>
 
-    <div class="card policy">
-      <h2>Medidas del gobierno</h2>
-
-      <h3>Impuestos y ayudas</h3>
-      <label>🧾 Impuesto sobre las ventas de la lonja</label>
-      <div class="row"><input type="range" id="tax" min="0" max="50" step="1" value="15"><span class="val" id="taxV">15%</span></div>
-      <label>💰 Pensión <span class="hint">(caracolas/año a cada viejo)</span></label>
-      <div class="row"><input type="range" id="pension" min="0" max="10" step="0.5" value="1"><span class="val" id="pensionV">1</span></div>
-      <label>🧺 Renta universal <span class="hint">(caracolas/año a cada habitante)</span></label>
-      <div class="row"><input type="range" id="ubi" min="0" max="10" step="0.5" value="0"><span class="val" id="ubiV">0</span></div>
-      <label class="check"><input type="checkbox" id="allowPrint"> 🖨️ Imprimir dinero si el tesoro no alcanza</label>
-      <p class="hint">Si no se permite, las ayudas y la obra pública se recortan cuando no hay dinero.</p>
-      <label class="check"><input type="checkbox" id="shareSurplus" checked> ♻️ Repartir el superávit del tesoro</label>
-      <p class="hint">El tesoro guarda una reserva y reparte el resto entre todos. Si no se reparte, el dinero se queda parado (deflación).</p>
-
-      <h3>Banco</h3>
-      <label>🏦 Tipo de interés de las hipotecas <span class="hint">(% anual)</span></label>
-      <div class="row"><input type="range" id="interest" min="0" max="20" step="0.5" value="3"><span class="val" id="interestV">3%</span></div>
-      <p class="hint">Lo pagan los hipotecados y lo cobran los ahorradores. Más alto → menos gente puede comprar casa.</p>
-
-      <h3>Recursos</h3>
-      <label>🎣 Cuota de pesca <span class="hint">(% del banco de peces al año)</span></label>
-      <div class="row"><input type="range" id="quota" min="1" max="30" step="1" value="8"><span class="val" id="quotaV">8%</span></div>
-      <p class="hint">Más cuota = más comida hoy, pero si el mar se esquilma, mañana habrá hambre.</p>
-
-      <h3>Trabajo</h3>
-      <label>👴 Edad de jubilación</label>
-      <div class="row"><input type="range" id="retireAge" min="30" max="80" step="1" value="60"><span class="val" id="retireAgeV">60 años</span></div>
-      <label class="check"><input type="checkbox" id="womenWork" checked> 👩‍🏭 Mujer trabajadora</label>
-      <p class="hint">Si se desactiva, las mujeres no pescan (marisquean para su casa): menos producción, más hijos.</p>
-      <label>🔨 Tope de constructores <span class="hint">(máx. % de adultos)</span></label>
-      <div class="row"><input type="range" id="builders" min="0" max="1" step="0.05" value="0.6"><span class="val" id="buildersV">60%</span></div>
-    </div>
-
     <div class="card">
       <h2>Crónica de la isla</h2>
       <div id="log"></div>
@@ -268,7 +378,28 @@
   </div>
 </div>
 
+<!-- Selector de escenarios -->
+<div class="modal hidden" id="scnModal">
+  <div class="box">
+    <h2>🏝️ Island Simulator</h2>
+    <p class="sub">Gobierna una pequeña isla de pescadores. Cada escenario te enseña una idea de economía.</p>
+    <div class="scn-grid" id="scnGrid"></div>
+  </div>
+</div>
+
+<!-- Resultado de un escenario -->
+<div class="modal hidden" id="resultModal">
+  <div class="box result-box">
+    <div class="big" id="rIcon"></div>
+    <h2 id="rTitle"></h2>
+    <p class="sub" id="rSub"></p>
+    <div class="body" id="rBody"></div>
+    <div class="m-actions" id="rActions"></div>
+  </div>
+</div>
+
 <script src="engine.js"></script>
+<script src="scenarios.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

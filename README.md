@@ -2,18 +2,19 @@
 
 Un pequeño **juego-simulación económica** (PoC) sobre una isla cuya población
 tiene que prosperar. El objetivo educativo es tocar conceptos de economía
-—sobre todo **inflación / deflación**, oferta y demanda, y política monetaria—
-de forma visual y jugable.
+—**inflación / deflación**, oferta y demanda, política fiscal y monetaria, banca,
+recursos naturales y pobreza— de forma visual y jugable.
 
-Cada **turno = 1 día**. Pulsa *Avanzar día* o activa *Auto* y observa cómo
-evoluciona la isla.
+Cada **turno = 1 año**. Pulsa *Avanzar año* o activa *Auto* y observa cómo
+evoluciona la isla. Con *Atrás / Adelante* puedes revisar años pasados
+(solo lectura).
 
 ## Cómo ejecutar
 
-No necesita build ni dependencias. Tienes dos opciones:
+No necesita build ni dependencias:
 
-- **Abrir directamente** `index.html` en el navegador (doble clic).
-- O servirlo por HTTP (recomendado, evita restricciones de `file://`):
+- **Abrir directamente** `index.html` en el navegador (doble clic), o
+- servirlo por HTTP:
 
 ```bash
 python -m http.server 8123
@@ -21,51 +22,86 @@ python -m http.server 8123
 
 Y abre <http://localhost:8123>.
 
-## Cómo se juega
+## Qué se ve
 
-- **Avanzar día / Auto / Reiniciar** controlan el tiempo.
-- Pestañas:
-  - **📈 Mercados** — precios, masa monetaria e inflación + gráficas.
-  - **🌳 Árbol genealógico** — linaje de todas las familias (vivos y †).
-  - **👥 Habitantes** — tabla con edad, etapa, caracolas y estado.
-- **Medidas del gobierno** (panel derecho):
-  - **Pensión a los viejos** — caracolas/día a los mayores de 60.
-  - **Renta universal (RBU)** — caracolas/día a todo el mundo.
-  - **Esfuerzo en construir viviendas** — qué parte de los adultos construye.
+- **La isla**: cada familia junto a su casa, con el apellido encima. Las parejas
+  sin vivienda propia aparecen en casa de sus padres; los recién llegados sin
+  casa, en la playa.
+- **📈 Mercados**: precio del pescado (con inflación de los últimos 10 años), lo
+  que se quiere comprar frente a lo que hay en la lonja, precio de la vivienda,
+  dinero en la calle y el banco.
+- **💚 Bienestar**: medidores de **poder adquisitivo y pobreza**, todos medidos
+  en **pescados** para ver la riqueza **real**, sin el efecto de la inflación:
+  - Producción por habitante (🐟/año).
+  - Riqueza por habitante (ahorro neto en 🐟).
+  - Desigualdad (índice de Gini).
+  - Tasa de pobreza y muertes por hambre en los últimos 10 años.
+- **📊 Pirámide**, **🌳 Árbol genealógico** y **👥 Habitantes**.
+- **🏛️ Tesoro público**: ingresos y gastos del año.
+
+## Medidas del gobierno
+
+| Medida | Qué hace | Qué enseña |
+|---|---|---|
+| 🧾 Impuesto sobre la lonja | % de cada venta va al tesoro | Para gastar hay que recaudar |
+| 💰 Pensión / 🧺 Renta universal | Se pagan del tesoro | Financiar con impuestos no genera inflación |
+| 🖨️ Imprimir dinero | Si el tesoro no llega, se imprime (si no, se recorta) | Imprimir → **inflación** |
+| ♻️ Repartir el superávit | El tesoro reparte lo que le sobra | Dinero parado → **deflación** |
+| 🏦 Tipo de interés | Lo pagan los hipotecados, lo cobran los ahorradores | Tipos altos → menos casas y menos hijos |
+| 🎣 Cuota de pesca | Máximo que se puede pescar al año | Tragedia de los comunes: sin cuota, el mar colapsa |
+| 👴 Edad de jubilación | A partir de ella no se produce | Menos trabajadores → más hambre |
+| 👩‍🏭 Mujer trabajadora | Si no, marisquea para casa | Menos producción, más natalidad |
 
 ## El modelo económico
 
-> **Idea central:** el *pescado* es el bien real (producción) y la *caracola* es
-> el dinero. El precio sale, en esencia, de la **teoría cuantitativa del
-> dinero**: `Precio ≈ (Dinero · Velocidad) / Pescado disponible` (M·V = P·Q).
+### Pesca y mercado
+- El **mar** es un recurso finito que se regenera solo. Si se sobrepesca, se
+  captura menos.
+- Cada familia **come primero de lo que pesca**; **vende el excedente** en la
+  lonja o **compra lo que le falta**. Los viejos viven de sus ahorros, de la
+  pensión, de la renta universal o de la ayuda de sus hijos.
+- Los pescadores no esquilman el mar para nada: pescan lo que su familia
+  necesita y lo que el mercado se llevó el año anterior.
+- **El precio sale de la oferta y la demanda**: si las familias quieren comprar
+  más pescado del que hay en la lonja, sube; si sobra, baja. Quien tiene ahorros
+  de sobra gasta parte en pescado extra, así que **más dinero en los bolsillos =
+  más demanda = precios más altos**.
+- El pescado de la lonja se estropea poco a poco (es perecedero).
 
-- **Imprimir dinero** (pensión / RBU) sin que crezca la pesca → sube la masa
-  monetaria → **inflación**. 🔺
-- **Producir más pescado** con el dinero fijo → **deflación**. 🔻
-- Una **sequía** reduce la pesca → escasez → **inflación por oferta**.
+### Dinero, tesoro y banco
+- El dinero solo **entra** en la isla si el gobierno imprime (o lo traen los
+  inmigrantes). Lo demás lo mueve de unos bolsillos a otros.
+- El **tesoro** cobra impuestos, vende viviendas públicas y recibe las herencias
+  sin heredero. Paga pensiones, renta universal y la obra pública.
+- El **banco** presta los **ahorros de las familias** a las parejas que compran
+  casa: es un intermediario, no crea dinero. Solo concede hipotecas que la
+  pareja pueda pagar. Si un hipotecado muere y la venta de su casa no cubre la
+  deuda, los ahorradores pierden esa parte.
 
-La masa monetaria (M) **solo cambia por las decisiones del gobierno**: el resto
-de transacciones (comprar pescado) mueven caracolas de unos a otros sin crear ni
-destruir dinero. Eso hace nítida la relación entre imprimir dinero y los precios.
+### Familias, vivienda y población
+- **Economía familiar**: todos los de una casa viven de una bolsa común. Si muere
+  el último miembro, su dinero lo heredan los hogares de sus hijos (o el tesoro).
+- **Vivienda**: obra pública. Un constructor tarda 5 años en hacer una casa,
+  cobrando un jornal del tesoro. Las parejas la compran con hipoteca. Si no
+  pueden, se casan igual y **viven con sus padres** hasta conseguirla.
+- **Natalidad**: la mujer de la familia, si es fértil (menos de 45 años), puede
+  tener hijos si la familia **no es pobre ni pasa hambre**; el ahorro y tener
+  casa propia la hacen más probable.
+- **Hambre**: dentro de una familia comen antes los niños, luego los adultos y
+  por último los viejos. Quien pasa 3 años seguidos sin comer lo suficiente muere.
+- **Inmigración**: si la isla tiene casas libres, el mar sano y poca pobreza,
+  llega gente buscando una vida mejor.
 
-### Demografía
-
-- Esperanza de vida ≈ 80–110 días. **Niño** (0–20), **adulto** (20–60),
-  **viejo** (+60).
-- Solo los **adultos producen**: pescan (más en abundancia, menos en sequía).
-- Consumo diario: niños y viejos **1 pescado**, adultos **2**.
-- La **familia** mantiene a sus dependientes (hijos, pareja). Por eso un viejo
-  **sin familia** depende de sus ahorros… o de la **pensión**: ahí se ve el
-  valor (y el coste inflacionario) de la política social.
-- Quien no come durante varios días seguidos muere de hambre.
-
-### Los dos mercados
-
-1. **Pescado** — se almacena en la *lonja*. Precio por oferta (stock) y demanda
-   (bocas a alimentar), modulado por la masa monetaria.
-2. **Vivienda** — un adulto tarda **20 días** en construir una casa. Dos adultos
-   solteros + una casa libre → forman **familia** y pueden tener hijos. El precio
-   de la vivienda se mueve por oferta (casas libres) y demanda (solteros).
+### Lecciones que aparecen solas
+- **Inflación monetaria**: imprimir para pagar ayudas dispara los precios, pero
+  no crea pescado: la riqueza real no sube.
+- **Inflación por escasez**: una sequía o un mar esquilmado suben el precio sin
+  que nadie imprima.
+- **Deflación**: si el tesoro acumula sin gastar, falta dinero en la calle.
+- **Trampa maltusiana**: si la producción no crece, la población crece hasta el
+  límite de la comida y la pobreza persiste. Las ayudas reparten la riqueza,
+  pero no la crean.
+- **Tragedia de los comunes**: sin cuota de pesca, el mar se agota.
 
 ## Estructura del código
 
@@ -73,14 +109,14 @@ destruir dinero. Eso hace nítida la relación entre imprimir dinero y los preci
 |---|---|
 | `index.html` | Estructura y estilos de la interfaz. |
 | `engine.js`  | Motor de simulación (economía + demografía). Sin UI. |
-| `app.js`     | Render de la isla, gráficas, árbol genealógico y controles. |
+| `app.js`     | Render de la isla, gráficas, pirámide, árbol y controles. |
 
 Todos los parámetros ajustables están en el objeto `CFG` al principio de
-`engine.js` (natalidad, pesca base, duración de la construcción, etc.).
+`engine.js`.
 
-## Ideas para ampliar (siguiente iteración)
+## Ideas para ampliar
 
-- Un tercer bien o un impuesto para cerrar el círculo monetario.
-- Agentes que *decidan* construir/pescar según precios (oferta endógena).
+- Un segundo bien (artesanía, servicios) para que la riqueza no sea solo comida.
+- Mejoras de productividad (barcas, redes) para escapar de la trampa maltusiana.
 - Eventos (tormentas, pesca milagrosa) y objetivos de partida.
 - Guardado de partidas y comparación de políticas.

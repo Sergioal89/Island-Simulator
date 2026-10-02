@@ -23,7 +23,7 @@
   }
   header h1 { margin:0; font-size:22px; letter-spacing:.5px; }
   header .day { font-size:14px; opacity:.85; }
-  .wrap { display:grid; grid-template-columns: 1fr 340px; gap:14px; padding:0 14px 20px; }
+  .wrap { display:grid; grid-template-columns: 1fr 360px; gap:14px; padding:0 14px 20px; }
   .wrap > div { min-width:0; } /* evita que el árbol ancho desborde el grid */
   @media (max-width:980px){ .wrap{ grid-template-columns:1fr; } }
   .card {
@@ -42,25 +42,43 @@
   button.ghost{ background:var(--panel2); color:var(--ink); border:1px solid var(--line); }
   button.active{ background:var(--gold); }
   .stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .stat-grid.three { grid-template-columns:repeat(3,1fr); }
+  @media (max-width:560px){ .stat-grid.three{ grid-template-columns:repeat(2,1fr); } }
   .stat { background:var(--panel2); border-radius:10px; padding:8px 10px; }
   .stat .v { font-size:20px; font-weight:700; }
+  .stat .v.sm { font-size:16px; }
   .stat .l { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+  .stat .s { font-size:11px; color:var(--muted); margin-top:2px; }
   .pill { font-size:11px; padding:2px 7px; border-radius:20px; font-weight:700; }
   .up{ background:#fde7e6; color:var(--red); }
   .down{ background:#e3f5e6; color:var(--green); }
   .flat{ background:#eef2f4; color:var(--muted); }
+  .bad{ color:var(--red); }
+  .good{ color:var(--green); }
   /* Políticas */
   .policy label { display:block; font-size:13px; margin:10px 0 3px; font-weight:600; }
   .policy .row { display:flex; align-items:center; gap:10px; }
   .policy input[type=range]{ flex:1; }
-  .policy .val { width:46px; text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
+  .policy .val { width:58px; text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
+  .policy .check { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .policy .check input { width:16px; height:16px; cursor:pointer; }
+  .policy h3 { margin:16px 0 2px; font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); border-top:1px solid var(--line); padding-top:10px; }
+  .policy h3:first-of-type { border-top:none; padding-top:0; margin-top:4px; }
   .hint{ font-size:11px; color:var(--muted); margin-top:2px; }
+  .setup-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .setup-grid label{ font-size:12px; font-weight:600; display:flex; flex-direction:column; gap:4px; }
+  .setup-grid input{ width:100%; padding:6px; border:1px solid var(--line); border-radius:8px; font-size:15px; text-align:center; }
+  /* Tesoro */
+  table.acc { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; }
+  table.acc td { padding:3px 2px; border-bottom:1px solid var(--line); }
+  table.acc td:last-child { text-align:right; font-weight:600; }
+  table.acc tr.total td { border-bottom:none; font-weight:700; }
   /* Log */
   #log { font-size:12px; line-height:1.5; max-height:170px; overflow:auto; }
   #log div{ padding:2px 0; border-bottom:1px solid var(--line); }
   /* Tabs */
-  .tabs{ display:flex; gap:6px; margin-bottom:10px; }
-  .tabs button{ flex:1; font-size:13px; padding:7px; }
+  .tabs{ display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .tabs button{ flex:1; font-size:13px; padding:7px; min-width:90px; }
   .view{ display:none; } .view.show{ display:block; }
   /* Árbol */
   #tree { width:100%; overflow:auto; }
@@ -68,22 +86,32 @@
   .legend{ display:flex; gap:12px; font-size:12px; margin-top:8px; flex-wrap:wrap; }
   .legend span{ display:inline-flex; align-items:center; gap:5px; }
   .dot{ width:11px; height:11px; border-radius:50%; display:inline-block; }
+  .key{ width:14px; height:3px; display:inline-block; border-radius:2px; }
   table.mini{ width:100%; border-collapse:collapse; font-size:12px; }
   table.mini td{ padding:3px 4px; border-bottom:1px solid var(--line); }
   canvas.chart{ width:100%; height:120px; display:block; background:var(--panel2); border-radius:8px; }
+  .chart-legend{ display:flex; gap:12px; font-size:11px; color:var(--muted); margin:10px 0 4px; flex-wrap:wrap; }
+  .chart-legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .explain{ font-size:12px; line-height:1.5; background:#eef6f8; border-left:3px solid var(--accent); padding:8px 10px; border-radius:6px; margin-top:12px; }
 </style>
 </head>
 <body>
 <header>
   <h1>🏝️ Island Simulator</h1>
-  <span class="day">Día <b id="dayNum">0</b> · <span id="season"></span></span>
+  <span class="day">Año <b id="dayNum">0</b> · <span id="season"></span></span>
   <span style="flex:1"></span>
   <div class="controls" style="margin:0">
-    <button id="stepBtn">▶ Avanzar día</button>
+    <button id="backBtn" class="ghost" title="Retroceder un año (solo lectura)">⏮ Atrás</button>
+    <button id="fwdBtn" class="ghost" title="Avanzar en el histórico">⏭ Adelante</button>
+    <button id="presentBtn" class="ghost" title="Volver al presente">⦿ Presente</button>
+    <button id="stepBtn">▶ Avanzar año</button>
     <button id="playBtn" class="ghost">⏩ Auto</button>
     <button id="resetBtn" class="ghost">↺ Reiniciar</button>
   </div>
 </header>
+<div id="pastBanner" style="display:none; margin:0 14px 10px; padding:8px 14px; border-radius:10px; background:#fde8c2; color:#7a5a12; font-size:13px; font-weight:600;">
+  👁 Viendo el pasado (solo lectura) — <span id="pastDay"></span>. Pulsa «Presente» para volver.
+</div>
 
 <div class="wrap">
   <!-- Columna principal -->
@@ -95,28 +123,58 @@
         <span><i class="dot" style="background:#7cc4e8"></i>Niño</span>
         <span><i class="dot" style="background:#2e8b57"></i>Adulto</span>
         <span><i class="dot" style="background:#9b7fb3"></i>Viejo</span>
-        <span>🏠 Vivienda &nbsp; 🔨 Construyendo</span>
+        <span>🏠 Vivienda &nbsp; 🔨 Construyendo &nbsp; 🍽️ Pasa hambre</span>
       </div>
     </div>
 
     <div class="card">
       <div class="tabs">
         <button class="tab-btn active" data-view="markets">📈 Mercados</button>
-        <button class="tab-btn" data-view="tree">🌳 Árbol genealógico</button>
+        <button class="tab-btn" data-view="welfare">💚 Bienestar</button>
+        <button class="tab-btn" data-view="pyramid">📊 Pirámide</button>
+        <button class="tab-btn" data-view="tree">🌳 Árbol</button>
         <button class="tab-btn" data-view="people">👥 Habitantes</button>
       </div>
 
       <div id="view-markets" class="view show">
-        <div class="stat-grid" style="margin-bottom:12px">
-          <div class="stat"><div class="l">Precio pescado</div><div class="v"><span id="priceFish"></span> <span id="fishInfl" class="pill flat"></span></div></div>
-          <div class="stat"><div class="l">Precio vivienda</div><div class="v"><span id="priceHouse"></span></div></div>
-          <div class="stat"><div class="l">Masa monetaria (M)</div><div class="v" id="money"></div></div>
-          <div class="stat"><div class="l">Caracolas impresas</div><div class="v" id="printed"></div></div>
+        <div class="stat-grid three" style="margin-bottom:12px">
+          <div class="stat"><div class="l">Precio pescado</div><div class="v"><span id="priceFish"></span> 🐚</div><div class="s">inflación 10 años: <span id="fishInfl" class="pill flat"></span></div></div>
+          <div class="stat"><div class="l">Lonja: demanda / oferta</div><div class="v sm" id="marketSD"></div><div class="s" id="marketHint"></div></div>
+          <div class="stat"><div class="l">Precio vivienda</div><div class="v"><span id="priceHouse"></span> 🐚</div><div class="s" id="houseFish"></div></div>
+          <div class="stat"><div class="l">Dinero en la calle (M)</div><div class="v" id="money"></div><div class="s">caracolas de las familias</div></div>
+          <div class="stat"><div class="l">🏦 Ahorro prestado / deuda</div><div class="v sm"><span id="bankDeposits"></span> / <span id="bankDebt"></span></div><div class="s">depósitos de ahorradores / hipotecas</div></div>
+          <div class="stat"><div class="l">Hipotecas sí / no</div><div class="v sm" id="mortgages"></div><div class="s">concedidas / denegadas</div></div>
         </div>
-        <p class="hint" style="margin:0 0 4px">Precio del pescado (caracolas) y masa monetaria en el tiempo</p>
+        <div class="chart-legend"><span><i class="key" style="background:#d8544f"></i>Precio del pescado</span><span><i class="key" style="background:#e6a817"></i>Dinero en la calle</span></div>
         <canvas id="chartPrice" class="chart"></canvas>
-        <p class="hint" style="margin:10px 0 4px">Población y stock de pescado en la lonja</p>
+        <div class="chart-legend"><span><i class="key" style="background:#1f7a8c"></i>Población</span><span><i class="key" style="background:#3fa34d"></i>Lonja</span><span><i class="key" style="background:#2a7bb8"></i>Banco de peces del mar</span></div>
         <canvas id="chartPop" class="chart"></canvas>
+      </div>
+
+      <div id="view-welfare" class="view">
+        <div class="stat-grid three" style="margin-bottom:12px">
+          <div class="stat"><div class="l">🐟 Producción / hab</div><div class="v" id="prodPerCap"></div><div class="s">pescados al año por persona</div></div>
+          <div class="stat"><div class="l">🐟 Riqueza / hab</div><div class="v" id="wealthPerCap"></div><div class="s">ahorro neto en pescados</div></div>
+          <div class="stat"><div class="l">Desigualdad (Gini)</div><div class="v" id="gini"></div><div class="s">0 = igualdad · 1 = uno lo tiene todo</div></div>
+          <div class="stat"><div class="l">Tasa de pobreza</div><div class="v" id="poverty"></div><div class="s">no cubren su comida con sus ahorros</div></div>
+          <div class="stat"><div class="l">💀 Muertes por hambre</div><div class="v" id="hunger10"></div><div class="s">últimos 10 años</div></div>
+          <div class="stat"><div class="l">⛵ Inmigrantes</div><div class="v" id="immigrants"></div><div class="s">llegados en total</div></div>
+        </div>
+        <div class="chart-legend"><span><i class="key" style="background:#3fa34d"></i>Riqueza 🐟/hab</span><span><i class="key" style="background:#1f7a8c"></i>Producción 🐟/hab</span><span><i class="key" style="background:#d8544f"></i>Pobreza %</span></div>
+        <canvas id="chartWelfare" class="chart"></canvas>
+        <div class="explain">
+          Medimos la riqueza en <b>pescados</b>, no en caracolas: así se ve la
+          riqueza <b>real</b>, sin el efecto de la inflación. Si se imprime dinero, la
+          gente tiene más caracolas… pero no más pescados.
+        </div>
+      </div>
+
+      <div id="view-pyramid" class="view">
+        <div style="display:flex; gap:16px; justify-content:center; font-size:12px; margin-bottom:6px">
+          <span><i class="dot" style="background:#4a90d4"></i> Hombres</span>
+          <span><i class="dot" style="background:#e07a9b"></i> Mujeres</span>
+        </div>
+        <div id="pyramid"></div>
       </div>
 
       <div id="view-tree" class="view">
@@ -126,7 +184,7 @@
       <div id="view-people" class="view">
         <table class="mini"><thead><tr>
           <td><b>Nombre</b></td><td><b>Edad</b></td><td><b>Etapa</b></td>
-          <td><b>Caracolas</b></td><td><b>Estado</b></td>
+          <td><b>Hogar 🐚</b></td><td><b>Estado</b></td>
         </tr></thead><tbody id="peopleBody"></tbody></table>
       </div>
     </div>
@@ -135,31 +193,72 @@
   <!-- Columna lateral -->
   <div style="display:flex; flex-direction:column; gap:14px;">
     <div class="card">
-      <h2>Población</h2>
+      <h2>Nueva partida</h2>
+      <div class="setup-grid">
+        <label>👶 Niños<input type="number" id="initChildren" min="0" max="40" value="4"></label>
+        <label>🧑 Adultos<input type="number" id="initAdults" min="0" max="60" value="10"></label>
+        <label>🧓 Viejos<input type="number" id="initOlds" min="0" max="40" value="2"></label>
+      </div>
+      <button id="newGameBtn" style="width:100%; margin-top:10px">🌱 Empezar partida</button>
+      <p class="hint" style="margin-top:6px">Define la población inicial. «Reiniciar» (arriba) usa estos mismos valores.</p>
+    </div>
+
+    <div class="card">
+      <h2>Población y recursos</h2>
       <div class="stat-grid">
         <div class="stat"><div class="l">Habitantes</div><div class="v" id="pop"></div></div>
-        <div class="stat"><div class="l">Lonja (pescado)</div><div class="v" id="stock"></div></div>
-        <div class="stat"><div class="l">Niños / Adultos / Viejos</div><div class="v" id="ages" style="font-size:16px"></div></div>
+        <div class="stat"><div class="l">Niños / Adultos / Viejos</div><div class="v sm" id="ages"></div></div>
+        <div class="stat"><div class="l">Banco de peces (mar)</div><div class="v sm" id="sea"></div></div>
+        <div class="stat"><div class="l">Lonja (a la venta)</div><div class="v" id="stock"></div></div>
+        <div class="stat"><div class="l">Pesca / consumo (año)</div><div class="v sm" id="catch"></div><div class="s" id="quotaNote"></div></div>
+        <div class="stat"><div class="l">Trabajo 🎣 / 🔨</div><div class="v sm" id="work"></div></div>
         <div class="stat"><div class="l">Viviendas (libres)</div><div class="v" id="houses"></div></div>
+        <div class="stat"><div class="l">Familias (sin casa)</div><div class="v sm" id="families"></div></div>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>🏛️ Tesoro público</h2>
+      <div class="stat-grid" style="margin-bottom:8px">
+        <div class="stat"><div class="l">Saldo del tesoro</div><div class="v" id="treasury"></div></div>
+        <div class="stat"><div class="l">Dinero impreso</div><div class="v sm" id="printed"></div><div class="s">este año / total</div></div>
+      </div>
+      <table class="acc"><tbody id="accounts"></tbody></table>
+      <p class="hint" id="cutNote" style="margin-top:6px"></p>
     </div>
 
     <div class="card policy">
       <h2>Medidas del gobierno</h2>
-      <label>💰 Pensión a los viejos <span class="hint">(caracolas/día)</span></label>
-      <div class="row"><input type="range" id="pension" min="0" max="10" step="0.5" value="0"><span class="val" id="pensionV">0</span></div>
 
-      <label>🧺 Renta universal (RBU) <span class="hint">(caracolas/día a todos)</span></label>
+      <h3>Impuestos y ayudas</h3>
+      <label>🧾 Impuesto sobre las ventas de la lonja</label>
+      <div class="row"><input type="range" id="tax" min="0" max="50" step="1" value="15"><span class="val" id="taxV">15%</span></div>
+      <label>💰 Pensión <span class="hint">(caracolas/año a cada viejo)</span></label>
+      <div class="row"><input type="range" id="pension" min="0" max="10" step="0.5" value="1"><span class="val" id="pensionV">1</span></div>
+      <label>🧺 Renta universal <span class="hint">(caracolas/año a cada habitante)</span></label>
       <div class="row"><input type="range" id="ubi" min="0" max="10" step="0.5" value="0"><span class="val" id="ubiV">0</span></div>
+      <label class="check"><input type="checkbox" id="allowPrint"> 🖨️ Imprimir dinero si el tesoro no alcanza</label>
+      <p class="hint">Si no se permite, las ayudas y la obra pública se recortan cuando no hay dinero.</p>
+      <label class="check"><input type="checkbox" id="shareSurplus" checked> ♻️ Repartir el superávit del tesoro</label>
+      <p class="hint">El tesoro guarda una reserva y reparte el resto entre todos. Si no se reparte, el dinero se queda parado (deflación).</p>
 
-      <label>🔨 Esfuerzo en construir viviendas</label>
-      <div class="row"><input type="range" id="builders" min="0" max="0.5" step="0.05" value="0.15"><span class="val" id="buildersV">15%</span></div>
+      <h3>Banco</h3>
+      <label>🏦 Tipo de interés de las hipotecas <span class="hint">(% anual)</span></label>
+      <div class="row"><input type="range" id="interest" min="0" max="20" step="0.5" value="3"><span class="val" id="interestV">3%</span></div>
+      <p class="hint">Lo pagan los hipotecados y lo cobran los ahorradores. Más alto → menos gente puede comprar casa.</p>
 
-      <p class="hint" style="margin-top:12px">
-        Imprimir caracolas (pensión/RBU) sin que crezca la pesca sube la masa
-        monetaria y provoca <b>inflación</b>. Si crece la producción con dinero
-        fijo, aparece <b>deflación</b>. Prueba a subir la RBU y mira el precio.
-      </p>
+      <h3>Recursos</h3>
+      <label>🎣 Cuota de pesca <span class="hint">(% del banco de peces al año)</span></label>
+      <div class="row"><input type="range" id="quota" min="1" max="30" step="1" value="8"><span class="val" id="quotaV">8%</span></div>
+      <p class="hint">Más cuota = más comida hoy, pero si el mar se esquilma, mañana habrá hambre.</p>
+
+      <h3>Trabajo</h3>
+      <label>👴 Edad de jubilación</label>
+      <div class="row"><input type="range" id="retireAge" min="30" max="80" step="1" value="60"><span class="val" id="retireAgeV">60 años</span></div>
+      <label class="check"><input type="checkbox" id="womenWork" checked> 👩‍🏭 Mujer trabajadora</label>
+      <p class="hint">Si se desactiva, las mujeres no pescan (marisquean para su casa): menos producción, más hijos.</p>
+      <label>🔨 Tope de constructores <span class="hint">(máx. % de adultos)</span></label>
+      <div class="row"><input type="range" id="builders" min="0" max="1" step="0.05" value="0.6"><span class="val" id="buildersV">60%</span></div>
     </div>
 
     <div class="card">

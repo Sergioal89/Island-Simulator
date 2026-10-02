@@ -2,26 +2,67 @@
  * Island Simulator — UI / render
  * ==========================================================================*/
 (function () {
-const { newWorld, step, stage, need, fullName, alive, totalMoney, CFG } = window.Island;
-
-let world = newWorld();
-let playing = false;
-let timer = null;
+const { newWorld, step, stage, need, fullName, alive, totalMoney, walletOf, hhOf, setRetireAge, CFG } = window.Island;
 
 const $ = id => document.getElementById(id);
 const fmt = n => (Math.round(n * 10) / 10).toLocaleString("es-ES");
 const fmt0 = n => Math.round(n).toLocaleString("es-ES");
 
+// liveWorld = la simulación; world = lo que se MUESTRA (puede ser una instantánea
+// del pasado, de solo lectura). timeline guarda una copia por día para rebobinar.
+let liveWorld, world;
+let timeline = [], cursor = 0;
+let playing = false, timer = null;
+
+const snap = () => JSON.parse(JSON.stringify(liveWorld));
+const viewingPast = () => cursor < timeline.length - 1;
+function recordSnapshot() {
+  timeline.push(snap());
+  if (timeline.length > 800) timeline.shift();
+  cursor = timeline.length - 1;
+  world = liveWorld;
+}
+function gotoCursor(i) {
+  cursor = Math.max(0, Math.min(timeline.length - 1, i));
+  world = viewingPast() ? timeline[cursor] : liveWorld;
+  render();
+}
+
 // --- Controles --------------------------------------------------------------
-$("stepBtn").onclick = () => { step(world); render(); };
-$("resetBtn").onclick = () => { world = newWorld(); stopPlay(); render(); };
+function readSetup() {
+  const num = (id, def) => {
+    const v = parseInt($(id).value, 10);
+    return Number.isFinite(v) && v >= 0 ? v : def;
+  };
+  return { children: num("initChildren", 4), adults: num("initAdults", 10), olds: num("initOlds", 2) };
+}
+function startNewGame() {
+  liveWorld = newWorld(readSetup());
+  syncSliders();                       // aplicar los valores actuales de política
+  timeline = [snap()]; cursor = 0; world = liveWorld;
+  stopPlay();
+  render();
+}
+function doStep() {
+  if (viewingPast()) { gotoCursor(timeline.length - 1); return; } // volver al presente
+  step(liveWorld);
+  recordSnapshot();
+  render();
+}
+$("stepBtn").onclick = doStep;
+$("resetBtn").onclick = startNewGame;
+$("newGameBtn").onclick = startNewGame;
 $("playBtn").onclick = () => playing ? stopPlay() : startPlay();
+$("backBtn").onclick = () => { stopPlay(); gotoCursor(cursor - 1); };
+$("fwdBtn").onclick = () => gotoCursor(cursor + 1);
+$("presentBtn").onclick = () => gotoCursor(timeline.length - 1);
 
 function startPlay() {
+  if (viewingPast()) gotoCursor(timeline.length - 1); // reanudar en el presente
   playing = true; $("playBtn").classList.add("active"); $("playBtn").textContent = "⏸ Pausa";
   timer = setInterval(() => {
-    step(world); render();
-    if (alive(world).length === 0) stopPlay();
+    step(liveWorld); recordSnapshot(); render();
+    if (alive(liveWorld).length === 0) stopPlay();
   }, 450);
 }
 function stopPlay() {
@@ -29,18 +70,34 @@ function stopPlay() {
   if (timer) clearInterval(timer);
 }
 
-// Sliders de política
+// Sliders de política (siempre actúan sobre la simulación viva)
+const sliderUpdaters = [];
 function bindSlider(id, key, fmtFn) {
   const el = $(id);
   const upd = () => {
     const v = parseFloat(el.value);
-    world.policy[key] = v;
+    if (liveWorld) liveWorld.policy[key] = v;
     $(id + "V").textContent = fmtFn(v);
   };
-  el.oninput = upd; upd();
+  el.oninput = upd;
+  sliderUpdaters.push(upd);
 }
+function bindCheckbox(id, key) {
+  const el = $(id);
+  const upd = () => { if (liveWorld) liveWorld.policy[key] = el.checked; };
+  el.onchange = upd;
+  sliderUpdaters.push(upd);
+}
+function syncSliders() { sliderUpdaters.forEach(u => u()); }
+bindSlider("tax", "tax", v => Math.round(v) + "%");
 bindSlider("pension", "pension", v => fmt(v));
 bindSlider("ubi", "ubi", v => fmt(v));
+bindCheckbox("allowPrint", "allowPrint");
+bindCheckbox("shareSurplus", "shareSurplus");
+bindSlider("interest", "interest", v => fmt(v) + "%");
+bindSlider("quota", "quota", v => Math.round(v) + "%");
+bindSlider("retireAge", "retireAge", v => Math.round(v) + " años");
+bindCheckbox("womenWork", "womenWork");
 bindSlider("builders", "buildersPct", v => Math.round(v * 100) + "%");
 
 // Tabs
@@ -57,12 +114,16 @@ document.querySelectorAll(".tab-btn").forEach(b => {
 // --- Render principal -------------------------------------------------------
 function render() {
   const w = world;
+  setRetireAge(w.policy.retireAge); // que stage() use la jubilación del mundo mostrado
   const living = alive(w);
   $("dayNum").textContent = w.day;
   $("season").textContent = w.drought > 0 ? "🌵 Sequía" :
     (w.abundance > 1.1 ? "🐟 Abundancia" : (w.abundance < 0.8 ? "🌧️ Escasez" : "⛅ Normal"));
 
-  // Stats
+  const st = w.stats || {};
+  const f = w.flows || {};
+
+  // --- Población y recursos ---
   $("pop").textContent = living.length;
   $("stock").textContent = fmt0(w.fishStock);
   const children = living.filter(p => stage(p) === "child").length;
@@ -71,23 +132,77 @@ function render() {
   $("ages").textContent = `${children} / ${adults} / ${olds}`;
   const freeH = w.houses.filter(h => h.ownerId === null).length;
   $("houses").textContent = `${w.houses.length} (${freeH})`;
+  const noHouse = w.households.filter(h => !h.houseId).length;
+  $("families").textContent = `${w.households.length} (${noHouse})`;
+  const seaPct = Math.round((w.seaFish / CFG.SEA_CAPACITY) * 100);
+  $("sea").innerHTML = `<span class="${seaPct < 40 ? "bad" : ""}">${seaPct}%</span> · ${fmt0(w.seaFish)}`;
+  const demand = living.reduce((s, p) => s + need(p), 0);
+  $("catch").textContent = `${fmt0(w.lastCatch)} / ${fmt0(demand)}`;
+  $("quotaNote").textContent = w.quotaHit ? "⚠️ cuota de pesca alcanzada" : "";
+  const workersN = living.filter(p => stage(p) === "adult" && (w.policy.womenWork || p.sex === "M")).length;
+  $("work").textContent = `${Math.max(0, workersN - w.builders)} / ${w.builders}`;
 
+  // --- Mercados ---
   $("priceFish").textContent = fmt(w.priceFish);
-  $("priceHouse").textContent = fmt0(w.priceHouse);
-  $("money").textContent = fmt0(totalMoney(w));
-  $("printed").textContent = fmt0(w.moneyPrinted);
-
-  // Inflación pill
-  const infl = w.prevPriceFish > 0 ? ((w.priceFish - w.prevPriceFish) / w.prevPriceFish) * 100 : 0;
+  const infl = st.inflation10 || 0;
   const pill = $("fishInfl");
-  pill.textContent = (infl >= 0 ? "+" : "") + infl.toFixed(1) + "%";
-  pill.className = "pill " + (infl > 0.5 ? "up" : (infl < -0.5 ? "down" : "flat"));
+  pill.textContent = (infl >= 0 ? "+" : "") + infl.toFixed(0) + "%";
+  pill.className = "pill " + (infl > 3 ? "up" : (infl < -3 ? "down" : "flat"));
+  const ratio = w.marketS > 0.01 ? w.marketD / w.marketS : 0;
+  $("marketSD").textContent = `${fmt0(w.marketD)} / ${fmt0(w.marketS)} 🐟`;
+  $("marketHint").textContent = ratio > 1.05 ? "falta pescado → el precio sube" :
+    (ratio < 0.95 ? "sobra pescado → el precio baja" : "equilibrio");
+  $("priceHouse").textContent = fmt0(w.priceHouse);
+  $("houseFish").textContent = `≈ ${fmt0(w.priceHouse / w.priceFish)} 🐟`;
+  $("money").textContent = fmt0(totalMoney(w));
+  $("bankDeposits").textContent = fmt0(w.households.reduce((s, h) => s + (h.deposit || 0), 0) + (w.treasuryDeposit || 0));
+  $("bankDebt").textContent = fmt0(w.households.reduce((s, h) => s + (h.debt || 0), 0));
+  $("mortgages").textContent = `${w.mortgagesGranted || 0} / ${w.mortgagesDenied || 0}`;
+
+  // --- Bienestar (medido en pescados: riqueza real) ---
+  $("prodPerCap").textContent = fmt(st.prodPerCap || 0);
+  $("wealthPerCap").textContent = fmt(st.wealthPerCap || 0);
+  $("gini").textContent = (st.gini || 0).toFixed(2);
+  $("poverty").innerHTML = `<span class="${(st.povertyRate || 0) > 20 ? "bad" : ""}">${Math.round(st.povertyRate || 0)}%</span>`;
+  $("hunger10").innerHTML = `<span class="${(st.hungerDeaths10 || 0) > 5 ? "bad" : ""}">${st.hungerDeaths10 || 0}</span>`;
+  $("immigrants").textContent = w.immigrants || 0;
+
+  // --- Tesoro público (cuentas del año) ---
+  $("treasury").textContent = fmt0(w.treasury);
+  $("printed").textContent = `${fmt0(f.printed || 0)} / ${fmt0(w.moneyPrinted)}`;
+  const rowsAcc = [
+    ["➕ Impuestos de la lonja", f.taxes],
+    ["➕ Venta de viviendas públicas", f.houseSales],
+    ["➕ Herencias sin heredero", f.estates],
+    ["➖ Pensiones y renta universal", -(f.welfare || 0)],
+    ["➖ Obra pública (constructores)", -(f.works || 0)],
+    ["➖ Reparto del superávit", -(f.dividend || 0)],
+  ];
+  const net = rowsAcc.reduce((s, r) => s + (r[1] || 0), 0);
+  $("accounts").innerHTML = rowsAcc.map(([k, v]) => `<tr><td>${k}</td><td>${fmt(v || 0)}</td></tr>`).join("") +
+    `<tr class="total"><td>Saldo del año</td><td class="${net < 0 ? "bad" : "good"}">${net >= 0 ? "+" : ""}${fmt(net)}</td></tr>`;
+  $("cutNote").innerHTML = w.welfareCut > 0.5
+    ? `<span class="bad">⚠️ No hay dinero: las ayudas se han recortado un ${Math.round(w.welfareCut)}%.</span> Sube impuestos o permite imprimir.`
+    : "";
 
   // Log
   $("log").innerHTML = w.log.map(l => `<div>${l}</div>`).join("");
 
+  // Estado de los controles de tiempo (modo solo lectura al ver el pasado)
+  const past = viewingPast();
+  $("pastBanner").style.display = past ? "" : "none";
+  if (past) $("pastDay").textContent = "año " + w.day;
+  $("stepBtn").disabled = false; // avanzar desde el pasado vuelve al presente
+  $("backBtn").disabled = cursor <= 0;
+  $("fwdBtn").disabled = !past;
+  $("presentBtn").disabled = !past;
+  $("backBtn").style.opacity = cursor <= 0 ? 0.5 : 1;
+  $("fwdBtn").style.opacity = past ? 1 : 0.5;
+  $("presentBtn").style.opacity = past ? 1 : 0.5;
+
   drawIsland();
   drawCharts();
+  if ($("view-pyramid").classList.contains("show")) drawPyramid();
   if ($("view-tree").classList.contains("show")) drawTree();
   if ($("view-people").classList.contains("show")) drawPeople();
 }
@@ -101,30 +216,103 @@ function drawIsland() {
 
   let s = "";
   // mar
-  s += `<rect width="${W}" height="${H}" fill="url(#sea)"/>`;
+  s += `<rect width="${W}" height="${H}" fill="url(#seaGrad)"/>`;
   // isla (elipse de arena con hierba encima)
   s += `<ellipse cx="400" cy="300" rx="330" ry="150" fill="#e8d6a3"/>`;
   s += `<ellipse cx="400" cy="285" rx="300" ry="125" fill="#7bc86c"/>`;
   s += `<ellipse cx="400" cy="275" rx="250" ry="95" fill="#8fd47e"/>`;
-  // palmeras decorativas
-  for (const [px,py] of [[120,250],[690,260],[400,190]]) {
+  // palmeras decorativas (en las esquinas, fuera de la "aldea")
+  for (const [px,py] of [[110,250],[700,255]]) {
     s += `<rect x="${px-3}" y="${py}" width="6" height="34" fill="#8a5a2b"/>`;
     s += `<circle cx="${px}" cy="${py}" r="16" fill="#3f9d4a"/>`;
   }
-  // casas
-  w.houses.forEach(h => {
-    const x = 120 + h.x * 560, y = 190 + h.y * 150;
-    const occupied = h.ownerId !== null;
-    s += houseSVG(x, y, occupied);
+
+  // --- Disposición: cada casa en una cuadrícula y su familia alrededor ------
+  const byId = new Map(w.people.map(p => [p.id, p]));
+  const hhById = new Map(w.households.map(h => [h.id, h]));
+  // casa en la que vive cada persona: la de su hogar; si su hogar no tiene casa
+  // (pareja sin vivienda propia), viven en casa de los padres de alguno de ellos
+  const parentsHouse = p => {
+    if (!p || !p.parents) return null;
+    for (const pid of p.parents) {
+      const par = byId.get(pid);
+      const phh = par && par.alive ? hhById.get(par.householdId) : null;
+      if (phh && phh.houseId) return phh.houseId;
+    }
+    return null;
+  };
+  const houseOf = p => {
+    const hh = hhById.get(p.householdId);
+    if (hh && hh.houseId) return hh.houseId;
+    if (hh) return parentsHouse(byId.get(hh.fatherId)) || parentsHouse(byId.get(hh.motherId)) || parentsHouse(p);
+    return parentsHouse(p);
+  };
+
+  // posiciones de las casas en rejilla dentro de la isla verde. Preferimos una
+  // rejilla ancha (máx. 2 filas) para que cada familia quepa debajo sin solaparse.
+  const N = w.houses.length;
+  const rows = N <= 5 ? 1 : 2;
+  const cols = Math.max(1, Math.ceil(N / rows));
+  const x0 = 165, x1 = 635, yTop = 222, yBot = 330;
+  const cellW = (x1 - x0) / cols;
+  const cellH = (yBot - yTop) / rows;
+  const hpos = new Map();
+  w.houses.forEach((h, i) => {
+    const r = Math.floor(i / cols), c = i % cols;
+    hpos.set(h.id, { x: x0 + cellW * (c + 0.5), y: yTop + cellH * (r + 0.5) });
   });
-  // habitantes
+
+  // agrupar residentes vivos por casa
+  const residentsByHouse = new Map();
+  const homeless = [];
   living.forEach(p => {
-    const x = 120 + p.x * 560, y = 210 + p.y * 160;
-    s += personSVG(x, y, p);
+    const hid = houseOf(p);
+    if (hid && hpos.has(hid)) {
+      if (!residentsByHouse.has(hid)) residentsByHouse.set(hid, []);
+      residentsByHouse.get(hid).push(p);
+    } else {
+      homeless.push(p);
+    }
+  });
+  // orden dentro del hogar: adultos (padres) primero, luego niños/viejos
+  const rank = p => (stage(p) === "adult" ? 0 : (stage(p) === "old" ? 1 : 2));
+
+  // dibujar casas (con el apellido de la familia que vive en ellas)
+  w.houses.forEach(h => {
+    const pos = hpos.get(h.id);
+    s += houseSVG(pos.x, pos.y - 8, h.ownerId !== null);
+    const owner = h.ownerId ? byId.get(h.ownerId) : null;
+    if (owner) {
+      const fam = esc(owner.surname.split(" ")[0]);
+      s += `<text x="${pos.x}" y="${pos.y - 20}" font-size="8" text-anchor="middle" font-weight="700" fill="#5a3a1f">${fam}</text>`;
+    }
+  });
+
+  // dibujar a cada familia agrupada bajo su casa
+  for (const [hid, res] of residentsByHouse) {
+    const pos = hpos.get(hid);
+    res.sort((a, b) => rank(a) - rank(b));
+    const perRow = res.length <= 3 ? res.length : 3;
+    res.forEach((p, k) => {
+      const rr = Math.floor(k / perRow), cc = k % perRow;
+      const inRow = Math.min(res.length - rr * perRow, perRow);
+      const px = pos.x + (cc - (inRow - 1) / 2) * 15;
+      const py = pos.y + 16 + rr * 15;
+      s += personSVG(px, py, p);
+    });
+  }
+
+  // sin hogar (solteros, huérfanos): en la playa inferior
+  homeless.forEach((p, k) => {
+    const perRow = 12;
+    const rr = Math.floor(k / perRow), cc = k % perRow;
+    const px = 150 + cc * 42;
+    const py = 360 + rr * 18;
+    s += personSVG(px, py, p);
   });
 
   const defs = `<defs>
-    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="seaGrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#4aa3d4"/><stop offset="1" stop-color="#2a7bb8"/>
     </linearGradient></defs>`;
   svg.innerHTML = defs + s;
@@ -144,8 +332,10 @@ function personSVG(x, y, p) {
   const color = st === "child" ? "#7cc4e8" : (st === "adult" ? "#2e8b57" : "#9b7fb3");
   const r = st === "child" ? 4 : 5.5;
   const building = p.building > 0;
-  const hungry = p.daysHungry > 0;
+  const hungry = p.hungryYears > 0;
+  const stName = { child: "Niño", adult: "Adulto", old: "Viejo" }[st];
   let g = `<g>`;
+  g += `<title>${esc(fullName(p))} · ${stName} · ${Math.floor(p.age)} años · hogar 🐚 ${fmt0(walletOf(world, p))}${hungry ? " · 🍽️ pasa hambre" : ""}</title>`;
   g += `<circle cx="${x}" cy="${y}" r="${r}" fill="${color}" stroke="#20323f" stroke-width="1"/>`;
   g += `<circle cx="${x}" cy="${y-r-3}" r="${r-1.5}" fill="${color}" stroke="#20323f" stroke-width="1"/>`;
   if (p.sex === "F") g += `<circle cx="${x}" cy="${y-r-3}" r="1.3" fill="#e6a817"/>`;
@@ -185,25 +375,80 @@ function drawCharts() {
     [h.map(d => d.priceFish), h.map(d => d.money)],
     ["#d8544f", "#e6a817"]);
   lineChart($("chartPop"),
-    [h.map(d => d.pop), h.map(d => d.fishStock)],
-    ["#1f7a8c", "#3fa34d"]);
+    [h.map(d => d.pop), h.map(d => d.fishStock), h.map(d => d.seaFish)],
+    ["#1f7a8c", "#3fa34d", "#2a7bb8"]);
+  if ($("view-welfare").classList.contains("show")) {
+    lineChart($("chartWelfare"),
+      [h.map(d => d.wealthPerCap || 0), h.map(d => d.prodPerCap || 0), h.map(d => d.poverty || 0)],
+      ["#3fa34d", "#1f7a8c", "#d8544f"]);
+  }
 }
 
 // --- Tabla de habitantes ----------------------------------------------------
 function drawPeople() {
-  const living = alive(world).sort((a, b) => a.id - b.id);
+  // ordenados por riqueza del hogar para ver de un vistazo las familias ricas
+  const living = alive(world).sort((a, b) => walletOf(world, b) - walletOf(world, a));
   const stName = { child: "Niño", adult: "Adulto", old: "Viejo" };
   $("peopleBody").innerHTML = living.map(p => {
     const st = stage(p);
-    const state = p.daysHungry > 0 ? `🍽️ Hambre (${p.daysHungry})` :
-      (p.building > 0 ? `🔨 Construye` : (p.partnerId ? "👨‍👩‍👧 Familia" : "Soltero"));
+    const hh = hhOf(world, p);
+    const state = p.hungryYears > 0 ? `🍽️ Hambre (${p.hungryYears} años)` :
+      (p.building > 0 ? `🔨 Construye` :
+      (p.partnerId ? (hh && !hh.houseId ? "🏚️ Casado, vive con sus padres" : "👨‍👩‍👧 Familia") : "Soltero"));
     return `<tr>
       <td>${fullName(p)} ${p.sex === "F" ? "♀" : "♂"}</td>
       <td>${Math.floor(p.age)}</td>
       <td>${stName[st]}</td>
-      <td>${fmt0(p.caracolas)}</td>
+      <td><b>🐚 ${fmt0(walletOf(world, p))}</b></td>
       <td>${state}</td></tr>`;
   }).join("");
+}
+
+// --- Pirámide poblacional ---------------------------------------------------
+function drawPyramid() {
+  const living = alive(world);
+  const BAND = 10;
+  const maxAge = living.length ? Math.max(10, ...living.map(p => Math.floor(p.age))) : 10;
+  const nBands = Math.min(12, Math.floor(maxAge / BAND) + 1);
+  // contar por franja y sexo
+  const bands = [];
+  let maxCount = 1;
+  for (let b = 0; b < nBands; b++) {
+    const lo = b * BAND, hi = lo + BAND - 1;
+    const inBand = living.filter(p => Math.floor(p.age) >= lo && Math.floor(p.age) <= hi);
+    const M = inBand.filter(p => p.sex === "M").length;
+    const F = inBand.filter(p => p.sex === "F").length;
+    maxCount = Math.max(maxCount, M, F);
+    bands.push({ lo, hi, M, F });
+  }
+
+  const W = 440, rowH = 24, padTop = 8;
+  const H = nBands * rowH + padTop + 24;
+  const cx = W / 2, labelW = 54, maxBar = cx - labelW / 2 - 8;
+  const retire = world.policy.retireAge;
+  const stageColor = lo => lo < CFG.CHILD_MAX_AGE ? "#2a7bb8" : (lo < retire ? "#2e8b57" : "#7a5ba6");
+
+  let svg = `<svg width="100%" viewBox="0 0 ${W} ${H}" style="max-height:360px">`;
+  bands.forEach((bd, i) => {
+    const y = padTop + (nBands - 1 - i) * rowH; // jóvenes abajo
+    const mw = (bd.M / maxCount) * maxBar;
+    const fw = (bd.F / maxCount) * maxBar;
+    const by = y + 3, bh = rowH - 7;
+    // barras
+    if (bd.M > 0) svg += `<rect x="${cx - labelW / 2 - mw}" y="${by}" width="${mw}" height="${bh}" fill="#4a90d4" rx="2"/>`;
+    if (bd.F > 0) svg += `<rect x="${cx + labelW / 2}" y="${by}" width="${fw}" height="${bh}" fill="#e07a9b" rx="2"/>`;
+    // conteos
+    if (bd.M > 0) svg += `<text x="${cx - labelW / 2 - mw - 3}" y="${y + rowH / 2 + 3}" font-size="9" text-anchor="end" fill="#20323f">${bd.M}</text>`;
+    if (bd.F > 0) svg += `<text x="${cx + labelW / 2 + fw + 3}" y="${y + rowH / 2 + 3}" font-size="9" fill="#20323f">${bd.F}</text>`;
+    // etiqueta de edad (coloreada por etapa)
+    svg += `<text x="${cx}" y="${y + rowH / 2 + 3}" font-size="9" font-weight="700" text-anchor="middle" fill="${stageColor(bd.lo)}">${bd.lo}–${bd.hi}</text>`;
+  });
+  // cabecera
+  svg += `<text x="${cx / 2}" y="${H - 6}" font-size="10" text-anchor="middle" fill="#6b7c89">♂ ${living.filter(p => p.sex === "M").length}</text>`;
+  svg += `<text x="${cx + cx / 2}" y="${H - 6}" font-size="10" text-anchor="middle" fill="#6b7c89">♀ ${living.filter(p => p.sex === "F").length}</text>`;
+  svg += `<text x="${cx}" y="${H - 6}" font-size="9" text-anchor="middle" fill="#6b7c89">edad</text>`;
+  svg += `</svg>`;
+  $("pyramid").innerHTML = svg;
 }
 
 // --- Árbol genealógico ------------------------------------------------------
@@ -227,7 +472,7 @@ function drawTree() {
   const rows = Array.from({ length: maxGen + 1 }, () => []);
   w.people.forEach(p => rows[gen.get(p.id)].push(p));
 
-  const NW = 96, NH = 34, GAPX = 16, GAPY = 70;
+  const NW = 96, NH = 46, GAPX = 16, GAPY = 82;
   // asignar posiciones
   const pos = new Map();
   let maxCols = 0;
@@ -277,6 +522,8 @@ function drawTree() {
         ${esc(p.firstName)} ${p.sex === "F" ? "♀" : "♂"}${p.alive ? "" : " †"}</text>
       <text x="${pp.x + NW / 2}" y="${pp.y + 25}" font-size="8" text-anchor="middle" fill="#6b7c89">
         ${esc(p.surname)}</text>
+      <text x="${pp.x + NW / 2}" y="${pp.y + 39}" font-size="9" text-anchor="middle" fill="${p.alive ? "#b8860b" : "#9aa4ac"}">
+        🐚 ${p.alive ? fmt0(walletOf(world, p)) : "—"}</text>
     </g>`;
   });
   svg += `</svg>`;
@@ -285,6 +532,7 @@ function drawTree() {
 
 function esc(s) { return String(s).replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c])); }
 
-// Primer render
-render();
+// Iniciar la primera partida
+startNewGame();
+window.__world = () => world; // depuración
 })();

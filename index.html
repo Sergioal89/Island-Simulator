@@ -65,16 +65,26 @@
   .flat{ background:#eef2f4; color:var(--muted); }
   .bad{ color:var(--red); }
   .good{ color:var(--green); }
-  /* Políticas */
-  .policy label { display:block; font-size:13px; margin:10px 0 3px; font-weight:600; }
-  .policy .row { display:flex; align-items:center; gap:10px; }
-  .policy input[type=range]{ flex:1; }
-  .policy .val { width:58px; text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
+  /* Políticas: una medida por línea (nombre · deslizador · valor) */
+  .policy .ctl { display:grid; grid-template-columns:128px 1fr 54px; align-items:center; column-gap:8px; padding:3px 0; }
+  .policy .ctl label { font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .policy .ctl.check-row { grid-template-columns:1fr; }
+  .policy .ctl .hint { grid-column:1 / -1; margin:0 0 4px; display:none; }
+  .policy.hints .ctl .hint { display:block; }
+  .policy input[type=range]{ width:100%; margin:0; }
+  .policy .val { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; font-size:13px; }
   .policy .check { display:flex; align-items:center; gap:8px; cursor:pointer; }
-  .policy .check input { width:16px; height:16px; cursor:pointer; }
-  .policy h3 { margin:16px 0 2px; font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); border-top:1px solid var(--line); padding-top:10px; }
-  .policy .grp:not(.hidden) ~ .grp:not(.hidden) h3 { }
-  .policy .grp.first h3 { border-top:none; padding-top:0; margin-top:4px; }
+  .policy .check input { width:15px; height:15px; cursor:pointer; margin:0; }
+  .policy h3 { margin:8px 0 2px; font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); border-top:1px solid var(--line); padding-top:6px; }
+  .policy .grp.first h3 { border-top:none; padding-top:0; margin-top:0; }
+  .policy h2 { margin-bottom:6px; }
+  /* Cabecera y columna lateral fijas: los controles siempre a la vista */
+  header { position:sticky; top:0; z-index:20; background:#0f4259; box-shadow:0 2px 10px rgba(0,0,0,.25); padding:10px 20px; margin-bottom:10px; }
+  .side { align-self:start; position:sticky; top:72px; max-height:calc(100vh - 82px); overflow-y:auto; padding:0 4px 4px; margin:0 -4px;
+    scrollbar-width:thin; }
+  @media (max-width:980px){ .side{ position:static; max-height:none; overflow:visible; } header{ position:static; } }
+  #missionCard .m-intro.collapsed { display:none; }
+  .m-more { font-size:11px; color:var(--accent); cursor:pointer; background:none; border:none; padding:0; font-weight:700; }
   .hint{ font-size:11px; color:var(--muted); margin-top:2px; }
   .setup-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
   .setup-grid label{ font-size:12px; font-weight:600; display:flex; flex-direction:column; gap:4px; }
@@ -104,6 +114,17 @@
   canvas.chart.tall{ height:150px; }
   .chart-legend{ display:flex; gap:12px; font-size:11px; color:var(--muted); margin:10px 0 4px; flex-wrap:wrap; }
   .chart-legend span{ display:inline-flex; align-items:center; gap:5px; }
+  /* Gráficos de riqueza */
+  .wealth-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  @media (max-width:1100px){ .wealth-grid{ grid-template-columns:1fr; } }
+  .wchart{ min-width:0; }
+  .wt{ font-size:13px; font-weight:700; }
+  .ws{ font-size:11px; color:var(--muted); margin-bottom:4px; min-height:2.4em; }
+  .wbox{ position:relative; }
+  .wbox svg{ width:100%; height:auto; display:block; overflow:visible; }
+  .ctip{ position:absolute; pointer-events:none; background:#20323f; color:#fff; font-size:11px; line-height:1.35;
+    padding:5px 8px; border-radius:6px; white-space:nowrap; transform:translate(-50%,-110%); display:none; z-index:5; }
+  .swatch{ width:11px; height:11px; border-radius:3px; display:inline-block; }
   .explain{ font-size:12px; line-height:1.5; background:#eef6f8; border-left:3px solid var(--accent); padding:8px 10px; border-radius:6px; margin-top:12px; }
   .toggle{ font-size:12px; font-weight:600; color:var(--muted); display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
   /* Misión */
@@ -181,7 +202,16 @@
         <span><i class="dot" style="background:#7cc4e8"></i>Niño</span>
         <span><i class="dot" style="background:#2e8b57"></i>Adulto</span>
         <span><i class="dot" style="background:#9b7fb3"></i>Viejo</span>
-        <span>🏠 Vivienda &nbsp; 🔨 Construyendo &nbsp; 🍽️ Pasa hambre</span>
+        <span>🔨 Construyendo &nbsp; 🍽️ Pasa hambre &nbsp; 🎩 Rentista (vive de sus ahorros)</span>
+      </div>
+      <div class="legend">
+        <span><svg width="22" height="20" viewBox="-12 -8 24 26"><g>
+          <rect x="-9" y="4" width="18" height="12" fill="#9c7a4f"/><polygon points="-12,5 12,5 1,-5" fill="#d9b65a"/></g></svg>Choza: ni con la casa llegan a 3 años de comida</span>
+        <span><svg width="22" height="20" viewBox="-14 -12 28 30"><g>
+          <rect x="-11" y="0" width="22" height="16" fill="#c86b4a" rx="2"/><polygon points="-14,0 14,0 0,-11" fill="#7a4327"/></g></svg>Casa</span>
+        <span><svg width="26" height="22" viewBox="-17 -16 34 34"><g>
+          <rect x="-13" y="-5" width="26" height="21" fill="#f6edd9" stroke="#b9a37a"/><polygon points="-16,-5 16,-5 10,-14 -10,-14" fill="#3d5a80"/>
+          <rect x="-10" y="-2" width="5" height="5" fill="#ffd56b"/><rect x="5" y="-2" width="5" height="5" fill="#ffd56b"/></g></svg>Mansión: su dinero les da para 15 años o más sin trabajar</span>
       </div>
     </div>
 
@@ -193,6 +223,33 @@
       <div class="chart-legend" id="kpiLegend"></div>
       <canvas id="chartKpi" class="chart tall"></canvas>
       <p class="hint">Cada línea tiene su propia escala: fíjate en si sube o baja.</p>
+    </div>
+
+    <!-- Riqueza real -->
+    <div class="card" id="wealthCard">
+      <h2>💰 Riqueza real <span class="hint" style="font-weight:400">— medida en pescados, así la inflación no la engaña</span></h2>
+      <div class="wealth-grid">
+        <div class="wchart">
+          <div class="wt">Riqueza media por habitante</div>
+          <div class="ws">pescados que podría comprar cada uno con su parte del ahorro</div>
+          <div class="wbox" id="wLine"></div>
+        </div>
+        <div class="wchart">
+          <div class="wt">Casas según la riqueza de quien vive en ellas</div>
+          <div class="ws">% de chozas, casas y mansiones</div>
+          <div class="wbox" id="wTiers"></div>
+        </div>
+        <div class="wchart">
+          <div class="wt">Cada casa hoy, de más pobre a más rica</div>
+          <div class="ws">años de comida que la familia podría pagarse con todo lo que tiene</div>
+          <div class="wbox" id="wBars"></div>
+        </div>
+      </div>
+      <div class="chart-legend" style="justify-content:center">
+        <span><i class="swatch" style="background:#b8860b"></i>Choza (menos de 3 años)</span>
+        <span><i class="swatch" style="background:#c0392b"></i>Casa</span>
+        <span><i class="swatch" style="background:#2e6fb7"></i>Mansión (15+ años solo en dinero)</span>
+      </div>
     </div>
 
     <div class="card" id="allData">
@@ -211,7 +268,7 @@
           <div class="stat"><div class="l">Precio vivienda</div><div class="v"><span id="priceHouse"></span> 🐚</div><div class="s" id="houseFish"></div></div>
           <div class="stat"><div class="l">Dinero en la calle (M)</div><div class="v" id="money"></div><div class="s">caracolas de las familias</div></div>
           <div class="stat"><div class="l">🏦 Ahorro prestado / deuda</div><div class="v sm"><span id="bankDeposits"></span> / <span id="bankDebt"></span></div><div class="s">depósitos de ahorradores / hipotecas</div></div>
-          <div class="stat"><div class="l">Hipotecas sí / no</div><div class="v sm" id="mortgages"></div><div class="s">concedidas / denegadas</div></div>
+          <div class="stat"><div class="l">Hipotecas sí / no</div><div class="v sm" id="mortgages"></div><div class="s" id="mortgagesWhy"></div></div>
         </div>
         <div class="chart-legend"><span><i class="key" style="background:#d8544f"></i>Precio del pescado</span><span><i class="key" style="background:#e6a817"></i>Dinero en la calle</span></div>
         <canvas id="chartPrice" class="chart"></canvas>
@@ -258,8 +315,8 @@
     </div>
   </div>
 
-  <!-- Columna lateral -->
-  <div class="col">
+  <!-- Columna lateral (fija al hacer scroll) -->
+  <div class="col side">
     <!-- Misión del escenario -->
     <div class="card" id="missionCard">
       <div class="m-head">
@@ -273,29 +330,29 @@
     </div>
 
     <div class="card policy" id="policyCard">
-      <h2>Medidas del gobierno</h2>
+      <h2 class="row"><span class="grow">Medidas del gobierno</span>
+        <label class="toggle" title="Mostrar una explicación debajo de cada medida"><input type="checkbox" id="showHints"> ℹ️ Explicar</label></h2>
       <p class="hint" id="noControls" style="font-size:12px">En este escenario solo observas: aún no tienes medidas que tomar.</p>
 
       <div class="grp" data-grp="fiscal">
         <h3>Impuestos y ayudas</h3>
-        <div class="ctl" data-ctl="tax">
-          <label>🧾 Impuesto sobre las ventas de la lonja</label>
-          <div class="row"><input type="range" id="tax" min="0" max="50" step="1" value="15"><span class="val" id="taxV">15%</span></div>
+        <div class="ctl" data-ctl="tax" title="Impuesto sobre las ventas de la lonja. Lo que se recauda va al tesoro, que paga pensiones, ayudas y obra pública.">
+          <label for="tax">🧾 Impuesto lonja</label><input type="range" id="tax" min="0" max="50" step="1" value="15"><span class="val" id="taxV">15%</span>
           <p class="hint">Lo que se recauda va al tesoro, que paga pensiones, ayudas y obra pública.</p>
         </div>
-        <div class="ctl" data-ctl="pension">
-          <label>💰 Pensión <span class="hint">(caracolas/año a cada viejo)</span></label>
-          <div class="row"><input type="range" id="pension" min="0" max="10" step="0.5" value="1"><span class="val" id="pensionV">1</span></div>
+        <div class="ctl" data-ctl="pension" title="Caracolas al año que cobra cada viejo, pagadas por el tesoro.">
+          <label for="pension">💰 Pensión</label><input type="range" id="pension" min="0" max="10" step="0.5" value="1"><span class="val" id="pensionV">1</span>
+          <p class="hint">Caracolas al año que cobra cada viejo, pagadas por el tesoro.</p>
         </div>
-        <div class="ctl" data-ctl="ubi">
-          <label>🧺 Renta universal <span class="hint">(caracolas/año a cada habitante)</span></label>
-          <div class="row"><input type="range" id="ubi" min="0" max="10" step="0.5" value="0"><span class="val" id="ubiV">0</span></div>
+        <div class="ctl" data-ctl="ubi" title="Caracolas al año que cobra cada habitante, pagadas por el tesoro.">
+          <label for="ubi">🧺 Renta universal</label><input type="range" id="ubi" min="0" max="10" step="0.5" value="0"><span class="val" id="ubiV">0</span>
+          <p class="hint">Caracolas al año que cobra cada habitante, pagadas por el tesoro.</p>
         </div>
-        <div class="ctl" data-ctl="allowPrint">
+        <div class="ctl check-row" data-ctl="allowPrint" title="Si el tesoro no alcanza, se imprimen caracolas nuevas. Si no se permite, las ayudas y la obra pública se recortan.">
           <label class="check"><input type="checkbox" id="allowPrint"> 🖨️ Imprimir dinero si el tesoro no alcanza</label>
           <p class="hint">Si no se permite, las ayudas y la obra pública se recortan cuando no hay dinero.</p>
         </div>
-        <div class="ctl" data-ctl="shareSurplus">
+        <div class="ctl check-row" data-ctl="shareSurplus" title="El tesoro guarda una reserva y reparte el resto entre todos. Si no se reparte, el dinero se queda parado (deflación).">
           <label class="check"><input type="checkbox" id="shareSurplus" checked> ♻️ Repartir el superávit del tesoro</label>
           <p class="hint">El tesoro guarda una reserva y reparte el resto entre todos. Si no se reparte, el dinero se queda parado (deflación).</p>
         </div>
@@ -303,36 +360,33 @@
 
       <div class="grp" data-grp="bank">
         <h3>Banco</h3>
-        <div class="ctl" data-ctl="interest">
-          <label>🏦 Tipo de interés de las hipotecas <span class="hint">(% anual)</span></label>
-          <div class="row"><input type="range" id="interest" min="0" max="20" step="0.5" value="3"><span class="val" id="interestV">3%</span></div>
-          <p class="hint">Lo pagan los hipotecados y lo cobran los ahorradores. Más alto → menos gente puede comprar casa.</p>
+        <div class="ctl" data-ctl="interest" title="Tipo de interés anual de las hipotecas. Muy alto: las parejas no pueden pagar la cuota. Muy bajo: nadie quiere prestar sus ahorros.">
+          <label for="interest">🏦 Tipo de interés</label><input type="range" id="interest" min="0" max="20" step="0.5" value="4"><span class="val" id="interestV">4%</span>
+          <p class="hint">Lo pagan los hipotecados y lo cobran los ahorradores. Muy alto → las parejas no pueden pagar la cuota. Muy bajo → nadie quiere prestar sus ahorros y el banco no tiene dinero.</p>
         </div>
       </div>
 
       <div class="grp" data-grp="res">
         <h3>Recursos</h3>
-        <div class="ctl" data-ctl="quota">
-          <label>🎣 Cuota de pesca <span class="hint">(% de los peces del mar al año)</span></label>
-          <div class="row"><input type="range" id="quota" min="1" max="30" step="1" value="8"><span class="val" id="quotaV">8%</span></div>
-          <p class="hint">Más cuota = más comida hoy, pero si el mar se esquilma, mañana habrá hambre.</p>
+        <div class="ctl" data-ctl="quota" title="Máximo de peces del mar que se pueden pescar al año (%). Más cuota = más comida hoy, pero si el mar se esquilma, mañana habrá hambre.">
+          <label for="quota">🎣 Cuota de pesca</label><input type="range" id="quota" min="1" max="30" step="1" value="8"><span class="val" id="quotaV">8%</span>
+          <p class="hint">% de los peces del mar que se pueden pescar al año. Más cuota = más comida hoy, pero si el mar se esquilma, mañana habrá hambre.</p>
         </div>
       </div>
 
       <div class="grp" data-grp="work">
         <h3>Trabajo</h3>
-        <div class="ctl" data-ctl="retireAge">
-          <label>👴 Edad de jubilación</label>
-          <div class="row"><input type="range" id="retireAge" min="30" max="80" step="1" value="60"><span class="val" id="retireAgeV">60 años</span></div>
+        <div class="ctl" data-ctl="retireAge" title="A partir de esta edad ya no se trabaja y se cobra la pensión.">
+          <label for="retireAge">👴 Jubilación</label><input type="range" id="retireAge" min="30" max="80" step="1" value="60"><span class="val" id="retireAgeV">60 años</span>
           <p class="hint">A partir de esta edad ya no se trabaja y se cobra la pensión.</p>
         </div>
-        <div class="ctl" data-ctl="womenWork">
+        <div class="ctl" data-ctl="builders" title="Máximo % de adultos que pueden trabajar construyendo casas (obra pública).">
+          <label for="builders">🔨 Constructores</label><input type="range" id="builders" min="0" max="1" step="0.05" value="0.6"><span class="val" id="buildersV">60%</span>
+          <p class="hint">Máximo % de adultos que pueden trabajar construyendo casas (obra pública).</p>
+        </div>
+        <div class="ctl check-row" data-ctl="womenWork" title="Si se desactiva, las mujeres no pescan (marisquean para su casa): menos producción, más hijos.">
           <label class="check"><input type="checkbox" id="womenWork" checked> 👩‍🏭 Mujer trabajadora</label>
           <p class="hint">Si se desactiva, las mujeres no pescan (marisquean para su casa): menos producción, más hijos.</p>
-        </div>
-        <div class="ctl" data-ctl="builders">
-          <label>🔨 Tope de constructores <span class="hint">(máx. % de adultos)</span></label>
-          <div class="row"><input type="range" id="builders" min="0" max="1" step="0.05" value="0.6"><span class="val" id="buildersV">60%</span></div>
         </div>
       </div>
     </div>
@@ -355,7 +409,7 @@
         <div class="stat"><div class="l">Banco de peces (mar)</div><div class="v sm" id="sea"></div></div>
         <div class="stat"><div class="l">Lonja (a la venta)</div><div class="v" id="stock"></div></div>
         <div class="stat"><div class="l">Pesca / consumo (año)</div><div class="v sm" id="catch"></div><div class="s" id="quotaNote"></div></div>
-        <div class="stat"><div class="l">Trabajo 🎣 / 🔨</div><div class="v sm" id="work"></div></div>
+        <div class="stat"><div class="l">Pescan 🎣 / construyen 🔨 / rentistas 🎩</div><div class="v sm" id="work"></div></div>
         <div class="stat"><div class="l">Viviendas (libres)</div><div class="v" id="houses"></div></div>
         <div class="stat"><div class="l">Familias (sin casa)</div><div class="v sm" id="families"></div></div>
       </div>

@@ -66,7 +66,13 @@ const CFG = {
   HOUSE_BASE_FISH: 30,   // valor de referencia de una casa, en pescados
   HOUSE_ADJUST: 0.15,
   LOAN_TERM: 25,         // años para amortizar una hipoteca
-  LOAN_INCOME_SHARE: 0.7,// parte del excedente de la pareja que el banco acepta como cuota
+  LOAN_INCOME_SHARE: 0.5,// parte del excedente de la pareja que el banco acepta como cuota
+  SAVER_FULL_RATE: 6,    // con este interés (%) o más, los ahorradores prestan todo su sobrante; con 0%, nada
+  SAVER_CURVE: 3,        // >1: con intereses bajos se presta mucho menos (al 3%, solo un 12%)
+  // Rentistas: una familia con ahorros para muchos años deja de trabajar y vive
+  // de sus ahorros y de los intereses del banco. Si el colchón baja, vuelve al tajo.
+  RENTIER_YEARS: 15,     // años de comida ahorrados (en dinero) para dejar de trabajar
+  RENTIER_BACK_YEARS: 8, // por debajo de esto, vuelven a trabajar
 
   // Natalidad: bonus si las mujeres NO trabajan (dedican más tiempo a criar)
   NONWORK_BIRTH_BONUS: 1.8,
@@ -169,9 +175,21 @@ function spareOf(w, hh, price) {
 function totalDeposits(w) {
   return w.households.reduce((s, h) => s + (h.deposit || 0), 0) + (w.treasuryDeposit || 0);
 }
-// Reúne `amount` caracolas del ahorro sobrante de las familias (proporcional).
+// Qué parte de su ahorro sobrante están dispuestas a prestar las familias: si el
+// banco no paga intereses, prefieren guardarlo en casa; cuanto más paga, más prestan.
+function lendWillingness(w) {
+  const x = Math.max(0, Math.min(1, w.policy.interest / CFG.SAVER_FULL_RATE));
+  return Math.pow(x, CFG.SAVER_CURVE);
+}
+// Ahorro que las familias ofrecen al banco ahora mismo
+function lendableSavings(w, price) {
+  const k = lendWillingness(w);
+  return w.households.reduce((s, h) => s + spareOf(w, h, price) * k, 0);
+}
+// Reúne `amount` caracolas del ahorro que las familias quieren prestar (proporcional).
 function fundLoan(w, amount, price) {
-  const lenders = w.households.map(h => ({ h, s: spareOf(w, h, price) })).filter(x => x.s > 0);
+  const k = lendWillingness(w);
+  const lenders = w.households.map(h => ({ h, s: spareOf(w, h, price) * k })).filter(x => x.s > 0);
   const total = lenders.reduce((a, x) => a + x.s, 0);
   if (total < amount) return false;
   for (const x of lenders) {
@@ -197,6 +215,67 @@ function payDepositors(w, interest, principal) {
     w.treasuryDeposit = Math.max(0, w.treasuryDeposit - principal * sh);
   }
 }
+// Patrimonio neto de un hogar (dinero + ahorro en el banco − hipoteca), en caracolas
+function netWorth(hh) {
+  return hh.wallet + (hh.deposit || 0) - (hh.debt || 0);
+}
+// Riqueza REAL de un hogar: cuántos años podría comer toda la familia con su
+// patrimonio sin trabajar (medido en pescados, así no engaña la inflación)
+function yearsOfFood(w, hh) {
+  return netWorth(hh) / Math.max(0.01, familyNeed(w, hh) * w.priceFish);
+}
+// Riqueza total contando la casa (lo que se pagaría hoy por ella), en años de comida
+function wealthYears(w, hh) {
+  const house = hh.houseId ? w.priceHouse : 0;
+  return (netWorth(hh) + house) / Math.max(0.01, familyNeed(w, hh) * w.priceFish);
+}
+// Nivel de vida de un hogar (para dibujar su casa):
+//   mansión: su DINERO le da para vivir muchos años sin trabajar (la casa no se come)
+//   choza:   ni contando la casa llega a 3 años de comida
+function wealthTier(w, hh) {
+  if (!hh) return "mid";
+  if (hh.rentier || yearsOfFood(w, hh) >= CFG.RENTIER_YEARS) return "rich";
+  if (wealthYears(w, hh) < CFG.RESERVE_YEARS) return "poor";
+  return "mid";
+}
+
+// Cuántas casas habitadas hay de cada tipo (choza, casa, mansión), como en el dibujo
+function tierCounts(w) {
+  const t = { tierPoor: 0, tierMid: 0, tierRich: 0 };
+  for (const hh of w.households) {
+    if (!hh.houseId || !livingMembers(w, hh).length) continue;
+    const k = wealthTier(w, hh);
+    if (k === "poor") t.tierPoor++; else if (k === "rich") t.tierRich++; else t.tierMid++;
+  }
+  return t;
+}
+
+// Rentistas: si una familia tiene ahorrada la comida de muchos años, deja de
+// trabajar y vive de sus ahorros y de los intereses que le paga el banco (que
+// salen de las cuotas de los hipotecados). Si el colchón baja, vuelve a trabajar.
+function updateRentiers(w) {
+  // un rentista compra TODA su comida: solo se retira si en la lonja sobra pescado
+  const marketHasFish = w.day > 1 && w.marketS >= (w.marketNeed || 0);
+  for (const hh of w.households) {
+    const mem = livingMembers(w, hh);
+    const adults = mem.filter(m => stage(m) === "adult");
+    if (!adults.length) { hh.rentier = false; continue; }
+    const years = yearsOfFood(w, hh);
+    const hungry = mem.some(m => m.hungryYears > 0);
+    const name = adults[0].surname.split(" ")[0];
+    if (!hh.rentier && years >= CFG.RENTIER_YEARS && marketHasFish && !hungry) {
+      hh.rentier = true;
+      for (const m of adults) m.building = 0;
+      logMsg(w, `🎩 La familia ${name} deja de trabajar: vive de sus ahorros y de los intereses.`);
+    } else if (hh.rentier && (years < CFG.RENTIER_BACK_YEARS || hungry)) {
+      hh.rentier = false;
+      logMsg(w, hungry
+        ? `🎣 La familia ${name} vuelve a trabajar: con dinero pero sin pescado que comprar.`
+        : `🎣 La familia ${name} ha gastado su colchón y vuelve a trabajar.`);
+    }
+  }
+}
+
 // Un préstamo que no se va a cobrar: los ahorradores pierden esa parte.
 function writeOff(w, loss) {
   const tot = totalDeposits(w);
@@ -258,7 +337,7 @@ function newWorld(setup) {
     marketD: 0, marketS: 0,              // demanda y oferta de pescado del último año
     policy: {
       pension: 1, ubi: 0, tax: 15, allowPrint: false, quota: 8, shareSurplus: true,
-      buildersPct: 0.6, interest: 3, retireAge: CFG.ADULT_MAX_AGE, womenWork: true,
+      buildersPct: 0.6, interest: 4, retireAge: CFG.ADULT_MAX_AGE, womenWork: true,
     },
     treasury: CFG.START_TREASURY, // tesoro público (impuestos, ventas de casas públicas, herencias vacantes)
     treasuryDeposit: 0,   // ahorro del tesoro prestado al banco (de herencias vacantes)
@@ -270,6 +349,8 @@ function newWorld(setup) {
     immigrants: 0,        // personas llegadas de fuera
     mortgagesGranted: 0,  // hipotecas concedidas
     mortgagesDenied: 0,   // hipotecas denegadas (no pueden pagarla o no hay ahorro)
+    deniedCantPay: 0,     //   … porque la cuota es más de lo que la pareja puede pagar
+    deniedNoFunds: 0,     //   … porque los ahorradores no prestan lo suficiente
     welfareCut: 0,        // % de ayudas recortadas por falta de tesoro
     hungerLog: [],        // muertes por hambre de cada año (últimos 10)
     flows: { taxes: 0, houseSales: 0, estates: 0, welfare: 0, dividend: 0, works: 0, printed: 0, interest: 0, bankRepaid: 0, loans: 0, immigration: 0 },
@@ -395,7 +476,9 @@ function step(w) {
   }
 
   // Trabajadores: todos los adultos, o solo los hombres si las mujeres no trabajan
-  const workers = alive(w).filter(p => stage(p) === "adult" && (w.policy.womenWork || p.sex === "M"));
+  updateRentiers(w);
+  const isRentier = p => { const hh = hhOf(w, p); return !!(hh && hh.rentier); };
+  const workers = alive(w).filter(p => stage(p) === "adult" && (w.policy.womenWork || p.sex === "M") && !isRentier(p));
 
   // --- 3. Reparto del trabajo: pescar o construir --------------------------
   const seaRatio = w.seaFish / CFG.SEA_CAPACITY;
@@ -440,7 +523,7 @@ function step(w) {
   const producers = workers.filter(p => p.building === 0).map(p => ({ p, cap: expCatch }));
   if (!w.policy.womenWork) {
     for (const p of alive(w)) {
-      if (stage(p) === "adult" && p.sex === "F") producers.push({ p, cap: expCatch * CFG.HOME_PRODUCTION });
+      if (stage(p) === "adult" && p.sex === "F" && !isRentier(p)) producers.push({ p, cap: expCatch * CFG.HOME_PRODUCTION });
     }
   }
   const prodByHH = new Map();
@@ -681,6 +764,7 @@ function step(w) {
 
   // --- 12. Indicadores y histórico -----------------------------------------
   computeStats(w, T);
+  w.lendable = lendableSavings(w, w.priceFish);
   const s = w.stats;
   w.history.push({
     day: w.day,
@@ -699,6 +783,9 @@ function step(w) {
     ubiReal: w.policy.ubi / w.priceFish,
     pensionReal: w.policy.pension / w.priceFish,
     noHouse: w.households.filter(h => !h.houseId && h.fatherId && h.motherId).length,
+    lendable: w.lendable,
+    rentiers: alive(w).filter(p => stage(p) === "adult" && (hhOf(w, p) || {}).rentier).length,
+    ...tierCounts(w),
     olds: alive(w).filter(p => stage(p) === "old").length,
     workers: alive(w).filter(p => stage(p) === "adult").length,
   });
@@ -842,8 +929,12 @@ function leaveHousehold(w, p, newHH) {
 function buyHouse(w, hh) {
   const house = w.houses.find(h => h.ownerId === null);
   if (!house) return false;
-  if (!canAffordMortgage(w, w.priceHouse) || !fundLoan(w, w.priceHouse, w.priceFish)) {
-    w.mortgagesDenied++;
+  if (!canAffordMortgage(w, w.priceHouse)) {
+    w.mortgagesDenied++; w.deniedCantPay++;
+    return false;
+  }
+  if (!fundLoan(w, w.priceHouse, w.priceFish)) {
+    w.mortgagesDenied++; w.deniedNoFunds++;
     return false;
   }
   const loan = w.priceHouse;
@@ -1007,4 +1098,4 @@ function immigration(w) {
 }
 
 // Exportar al ámbito global (lo usa app.js)
-window.Island = { CFG, newWorld, step, stage, need, fullName, alive, totalMoney, walletOf, hhOf, setRetireAge };
+window.Island = { CFG, newWorld, step, stage, need, fullName, alive, totalMoney, walletOf, hhOf, setRetireAge, netWorth, yearsOfFood, wealthYears, wealthTier };

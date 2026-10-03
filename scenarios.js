@@ -59,8 +59,13 @@ const KPIS = {
     bad: w => (w.welfareCut || 0) > 20 },
   dependency: { label: "Viejos por trabajador", value: w => { const l = last(w); return fmt2((l.olds || 0) / Math.max(1, l.workers || 0)); },
     sub: () => "cuántos mantiene cada adulto" },
-  mortgages: { label: "Hipotecas sí / no", value: w => `${w.mortgagesGranted || 0} / ${w.mortgagesDenied || 0}`, sub: () => "concedidas / denegadas" },
+  mortgages: { label: "Hipotecas concedidas", value: w => fmt0(w.mortgagesGranted || 0),
+    sub: w => `denegadas: ${w.deniedCantPay || 0} no pueden pagar · ${w.deniedNoFunds || 0} sin ahorro en el banco` },
+  lendable: { label: "Ahorro que se presta", value: w => `${fmt0(w.lendable || 0)} 🐚`,
+    sub: w => `una casa cuesta ${fmt0(w.priceHouse)} 🐚`, bad: w => (w.lendable || 0) < w.priceHouse },
   noHouse: { label: "Parejas sin casa", value: w => fmt0(last(w).noHouse || 0), sub: () => "viven con sus padres", bad: w => (last(w).noHouse || 0) > 3 },
+  rentiers: { label: "Rentistas 🎩", value: w => fmt0(last(w).rentiers || 0),
+    sub: w => `adultos que viven de sus ahorros · intereses este año: ${fmt0((w.flows || {}).interest || 0)} 🐚` },
   births10: { label: "Nacimientos", value: w => fmt0((w.stats || {}).births10 || 0), sub: () => "últimos 10 años" },
   poverty: { label: "Pobreza", value: w => `${Math.round((w.stats || {}).povertyRate || 0)}%`, sub: () => "no cubren su comida",
     bad: w => ((w.stats || {}).povertyRate || 0) > 20 },
@@ -207,12 +212,13 @@ const SCENARIOS = [
     id: "bank", icon: "🏦", title: "El banco", lesson: "Tipos de interés, vivienda y natalidad",
     level: "Reto",
     intro: `Una isla <b>joven</b>: muchos niños que pronto querrán casarse y tener casa propia.
-      Para comprarla piden una <b>hipoteca</b> al banco, que presta los ahorros de otras
-      familias. El tipo de interés está muy alto: <b>15%</b>.`,
-    setup: { children: 10, adults: 6, olds: 2, stableClimate: true, policy: { interest: 15 } },
+      Para comprarla piden una <b>hipoteca</b> al banco. Pero el banco no tiene dinero
+      propio: presta los <b>ahorros de otras familias</b>, que solo se los dejan si a
+      cambio cobran intereses. El tipo de interés está en el <b>12%</b>.`,
+    setup: { children: 10, adults: 6, olds: 2, stableClimate: true, policy: { interest: 12 } },
     controls: ["interest"],
-    kpis: ["mortgages", "noHouse", "births10", "pop"],
-    chart: [["noHouse", "Parejas sin casa", "#d8544f"], ["births10", "Nacimientos (10 años)", "#3fa34d"], ["pop", "Población", "#1f7a8c"]],
+    kpis: ["mortgages", "lendable", "noHouse", "rentiers"],
+    chart: [["noHouse", "Parejas sin casa", "#d8544f"], ["lendable", "Ahorro que se presta", "#e6a817"], ["pop", "Población", "#1f7a8c"]],
     phases: [
       { type: "goal", years: 40, text: "Llega al <b>año 40</b> con las parejas jóvenes en su propia casa.",
         conds: [
@@ -224,13 +230,23 @@ const SCENARIOS = [
     ],
     conclusion: (w, m) => `
       ${m.status === "won" ? "<p>¡Las parejas jóvenes tienen casa!</p>" : ""}
-      <p>El <b>tipo de interés</b> es el precio del dinero prestado. Si es alto, la cuota de la
-      hipoteca es más de lo que una pareja puede pagar: el banco se la deniega y tienen que
-      <b>vivir con sus padres</b>, donde tienen menos hijos.</p>
-      <p>Si es bajo, casi todos pueden comprar casa… pero los <b>ahorradores</b>, que son
-      quienes prestan ese dinero, apenas ganan nada por él. Subir o bajar los tipos siempre
-      beneficia a unos y perjudica a otros.</p>
-      <p>Hipotecas concedidas: <b>${w.mortgagesGranted}</b> · denegadas: <b>${w.mortgagesDenied}</b>.</p>`,
+      <p>El <b>tipo de interés</b> es el precio del dinero prestado, y tiene dos lados:</p>
+      <ul>
+        <li><b>Muy alto</b>: la cuota de la hipoteca es más de lo que una pareja puede pagar.
+          El banco se la deniega y tienen que <b>vivir con sus padres</b>, donde tienen menos hijos.</li>
+        <li><b>Muy bajo</b>: a los ahorradores no les compensa prestar sus caracolas y las
+          guardan en casa. El banco se queda <b>sin dinero que prestar</b> y tampoco hay hipotecas.</li>
+      </ul>
+      <p>El buen tipo de interés es el que equilibra a los dos lados: lo bastante alto para que
+      los ahorradores presten y lo bastante bajo para que las parejas puedan pagar. Es el mismo
+      equilibrio de <b>oferta y demanda</b> que el del pescado, pero con el dinero.</p>
+      <p>🎩 Los intereses que pagan los hipotecados los cobran los ahorradores. Las familias
+      con muchos ahorros pueden incluso <b>dejar de trabajar</b> y vivir de ellos: son los
+      <b>rentistas</b>. Viven en las mansiones de la isla, pero no pescan, así que hay menos
+      pescado para todos.</p>
+      <p>En tu partida: <b>${w.mortgagesGranted}</b> hipotecas concedidas; denegadas
+      <b>${w.deniedCantPay || 0}</b> porque la pareja no podía pagar y <b>${w.deniedNoFunds || 0}</b>
+      porque el banco no tenía ahorro.</p>`,
   },
   {
     id: "free", icon: "🧭", title: "Isla libre", lesson: "Todas las medidas a la vez",

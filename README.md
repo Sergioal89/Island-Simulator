@@ -23,7 +23,7 @@ medidas.
 | 🖨️ La imprenta | Experimento | Renta universal, imprimir | Imprimir dinero → inflación; no crea riqueza |
 | 🎣 El mar | Reto | Cuota de pesca | Tragedia de los comunes |
 | 👴 Las pensiones | Reto | Pensión, impuesto, jubilación | Envejecimiento: ninguna medida sola basta |
-| 🏦 El banco | Reto | Tipo de interés | Tipos altos → sin casa → menos hijos |
+| 🏦 El banco | Reto | Tipo de interés | Muy alto: no pueden pagar la hipoteca. Muy bajo: nadie presta sus ahorros |
 | 🧭 Isla libre | Sandbox | Todos | Todo a la vez, con clima real |
 
 Al terminar cada escenario se explica qué ha pasado, con los números de tu
@@ -48,7 +48,12 @@ Y abre <http://localhost:8123>.
 
 - **La isla**: cada familia junto a su casa, con el apellido encima. Las parejas
   sin vivienda propia aparecen en casa de sus padres; los recién llegados sin
-  casa, en la playa.
+  casa, en la playa. La casa se dibuja según la riqueza **real** de la familia,
+  medida en años de comida:
+  - 🛖 **Choza**: ni contando la casa llegan a 3 años de comida.
+  - 🏠 **Casa**: lo normal.
+  - 🏰 **Mansión**: su dinero les da para 15 años o más sin trabajar. Si hay
+    inflación, sus ahorros valen menos y la mansión puede volver a ser casa.
 - **📈 Mercados**: precio del pescado (con inflación de los últimos 10 años), lo
   que se quiere comprar frente a lo que hay en la lonja, precio de la vivienda,
   dinero en la calle y el banco.
@@ -69,7 +74,7 @@ Y abre <http://localhost:8123>.
 | 💰 Pensión / 🧺 Renta universal | Se pagan del tesoro | Financiar con impuestos no genera inflación |
 | 🖨️ Imprimir dinero | Si el tesoro no llega, se imprime (si no, se recorta) | Imprimir → **inflación** |
 | ♻️ Repartir el superávit | El tesoro reparte lo que le sobra | Dinero parado → **deflación** |
-| 🏦 Tipo de interés | Lo pagan los hipotecados, lo cobran los ahorradores | Tipos altos → menos casas y menos hijos |
+| 🏦 Tipo de interés | Lo pagan los hipotecados, lo cobran los ahorradores | Muy alto → no pueden pagar la casa; muy bajo → nadie presta sus ahorros |
 | 🎣 Cuota de pesca | Máximo que se puede pescar al año | Tragedia de los comunes: sin cuota, el mar colapsa |
 | 👴 Edad de jubilación | A partir de ella no se produce | Menos trabajadores → más hambre |
 | 👩‍🏭 Mujer trabajadora | Si no, marisquea para casa | Menos producción, más natalidad |
@@ -99,6 +104,13 @@ Y abre <http://localhost:8123>.
   casa: es un intermediario, no crea dinero. Solo concede hipotecas que la
   pareja pueda pagar. Si un hipotecado muere y la venta de su casa no cubre la
   deuda, los ahorradores pierden esa parte.
+- Los ahorradores **deciden cuánto prestar según el interés**: al 0% guardan su
+  dinero en casa y el banco no tiene qué prestar; a partir del 6% prestan todo
+  lo que les sobra.
+- 🎩 **Rentistas**: una familia cuyo dinero le da para 15 años de comida deja de
+  trabajar y vive de sus ahorros y de los intereses del banco (solo si en la lonja
+  sobra pescado, porque tiene que comprarlo todo). Si su colchón baja de 8 años o
+  pasa hambre, vuelve a trabajar.
 
 ### Familias, vivienda y población
 - **Economía familiar**: todos los de una casa viven de una bolsa común. Si muere

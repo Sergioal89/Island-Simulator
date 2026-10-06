@@ -11,10 +11,17 @@ const avgLast = (w, key, n) => {
   const h = w.history.slice(-n);
   return h.length ? h.reduce((s, d) => s + (d[key] || 0), 0) / h.length : 0;
 };
+// adultos y viejos vivos ahora mismo
+const ages = w => {
+  const living = I.alive(w);
+  return { adults: living.filter(p => I.stage(p) === "adult").length, olds: living.filter(p => I.stage(p) === "old").length };
+};
 const seaPct = w => (w.seaFish / I.CFG.SEA_CAPACITY) * 100;
 const fmt = n => (Math.round(n * 10) / 10).toLocaleString("es-ES");
 const fmt0 = n => Math.round(n).toLocaleString("es-ES");
 const fmt2 = n => (Math.round(n * 100) / 100).toLocaleString("es-ES");
+// inflación «como en las noticias»: % al año, media de los últimos 10 años
+const inflTxt = w => { const i = (w.stats || {}).inflationYear || 0; return `${i >= 0 ? "+" : ""}${fmt(i)}%`; };
 
 // Foto de la economía en un momento dado (para comparar antes / después)
 function snapshot(w) {
@@ -40,8 +47,13 @@ function snapshot(w) {
 // ---------------------------------------------------------------------------
 const KPIS = {
   price: { label: "Precio del pescado", value: w => `${fmt(w.priceFish)} 🐚`,
-    sub: w => { const i = (w.stats || {}).inflation10 || 0; return `inflación 10 años: ${i >= 0 ? "+" : ""}${Math.round(i)}%`; },
-    bad: w => ((w.stats || {}).inflation10 || 0) > 30 },
+    sub: w => `inflación: ${inflTxt(w)} al año`,
+    bad: w => ((w.stats || {}).inflationYear || 0) > 5 },
+  inflation: { label: "Inflación", value: w => `${inflTxt(w)}`,
+    sub: () => "al año (media de 10 años) · lo sano: 0–3%",
+    bad: w => ((w.stats || {}).inflationYear || 0) > 5 },
+  bankMoney: { label: "Dinero en la calle / en el banco", value: w => `${fmt0(I.totalMoney(w))} / ${fmt0(w.lendable || 0)}`,
+    sub: () => "lo del banco sin prestar no se gasta" },
   money: { label: "Caracolas en la calle", value: w => fmt0(I.totalMoney(w)), sub: () => "dinero de las familias" },
   printed: { label: "Dinero impreso", value: w => fmt0(w.moneyPrinted), sub: () => "caracolas creadas en total" },
   ubiReal: { label: "Renta universal real", value: w => `${fmt2(w.policy.ubi / w.priceFish)} 🐟`,
@@ -53,15 +65,15 @@ const KPIS = {
   catchPerCap: { label: "Pesca por habitante", value: w => `${fmt((w.stats || {}).prodPerCap || 0)} 🐟`, sub: () => "al año (un adulto come 2)" },
   hunger10: { label: "Muertes por hambre", value: w => fmt0((w.stats || {}).hungerDeaths10 || 0), sub: () => "últimos 10 años",
     bad: w => ((w.stats || {}).hungerDeaths10 || 0) > 5 },
-  pop: { label: "Habitantes", value: w => fmt0(I.alive(w).length), sub: w => { const l = last(w); return `${l.workers || 0} adultos · ${l.olds || 0} viejos`; } },
+  pop: { label: "Habitantes", value: w => fmt0(I.alive(w).length), sub: w => { const c = ages(w); return `${c.adults} adultos · ${c.olds} viejos`; } },
   treasury: { label: "Tesoro público", value: w => `${fmt0(w.treasury)} 🐚`, sub: w => `impuestos este año: ${fmt0((w.flows || {}).taxes || 0)}` },
   cut: { label: "Recorte de ayudas", value: w => `${Math.round(w.welfareCut || 0)}%`, sub: () => "lo que el tesoro no puede pagar",
     bad: w => (w.welfareCut || 0) > 20 },
-  dependency: { label: "Viejos por trabajador", value: w => { const l = last(w); return fmt2((l.olds || 0) / Math.max(1, l.workers || 0)); },
+  dependency: { label: "Viejos por trabajador", value: w => { const c = ages(w); return fmt2(c.olds / Math.max(1, c.adults)); },
     sub: () => "cuántos mantiene cada adulto" },
   mortgages: { label: "Hipotecas concedidas", value: w => fmt0(w.mortgagesGranted || 0),
     sub: w => `denegadas: ${w.deniedCantPay || 0} no pueden pagar · ${w.deniedNoFunds || 0} sin ahorro en el banco` },
-  lendable: { label: "Ahorro que se presta", value: w => `${fmt0(w.lendable || 0)} 🐚`,
+  lendable: { label: "Ahorro en el banco sin prestar", value: w => `${fmt0(w.lendable || 0)} 🐚`,
     sub: w => `una casa cuesta ${fmt0(w.priceHouse)} 🐚`, bad: w => (w.lendable || 0) < w.priceHouse },
   noHouse: { label: "Parejas sin casa", value: w => fmt0(last(w).noHouse || 0), sub: () => "viven con sus padres", bad: w => (last(w).noHouse || 0) > 3 },
   rentiers: { label: "Rentistas 🎩", value: w => fmt0(last(w).rentiers || 0),
@@ -143,10 +155,10 @@ const SCENARIOS = [
   {
     id: "sea", icon: "🎣", title: "El mar", lesson: "La tragedia de los comunes",
     level: "Reto",
-    intro: `El mar es de todos. Los pescadores pueden sacar hasta el <b>25%</b> de los peces
+    intro: `El mar es de todos. Los pescadores pueden sacar hasta el <b>30%</b> de los peces
       cada año y hay comida de sobra… por ahora. Pero los peces necesitan tiempo para
       reproducirse.`,
-    setup: { children: 8, adults: 16, olds: 2, stableClimate: true, policy: { quota: 25 } },
+    setup: { children: 12, adults: 20, olds: 2, stableClimate: true, policy: { quota: 30 } },
     controls: ["quota"],
     kpis: ["sea", "catchPerCap", "pop", "hunger10"],
     chart: [["seaFish", "Peces en el mar", "#2a7bb8"], ["pop", "Población", "#1f7a8c"], ["hunger10", "Muertes por hambre (10 años)", "#d8544f"]],
@@ -180,7 +192,7 @@ const SCENARIOS = [
     level: "Reto",
     intro: `La isla está <b>envejecida</b>: hay más viejos que adultos trabajando. Las
       pensiones se pagan con los <b>impuestos</b> de la lonja, y el tesoro está casi vacío.`,
-    setup: { children: 2, adults: 8, olds: 12, treasury: 60, stableClimate: true,
+    setup: { children: 2, adults: 8, olds: 12, treasury: 150, stableClimate: true,
       policy: { pension: 3, tax: 10, retireAge: 55 } },
     controls: ["pension", "tax", "retireAge"],
     kpis: ["cut", "treasury", "dependency", "pensionReal"],
@@ -218,12 +230,12 @@ const SCENARIOS = [
     setup: { children: 10, adults: 6, olds: 2, stableClimate: true, policy: { interest: 12 } },
     controls: ["interest"],
     kpis: ["mortgages", "lendable", "noHouse", "rentiers"],
-    chart: [["noHouse", "Parejas sin casa", "#d8544f"], ["lendable", "Ahorro que se presta", "#e6a817"], ["pop", "Población", "#1f7a8c"]],
+    chart: [["noHouse", "Parejas sin casa", "#d8544f"], ["lendable", "Ahorro en el banco sin prestar", "#e6a817"], ["pop", "Población", "#1f7a8c"]],
     phases: [
       { type: "goal", years: 40, text: "Llega al <b>año 40</b> con las parejas jóvenes en su propia casa.",
         conds: [
-          { kind: "end", text: "Al final, de media 2 parejas o menos sin casa (últimos 10 años)",
-            test: w => avgLast(w, "noHouse", 10) <= 2, value: w => fmt(avgLast(w, "noHouse", 10)) },
+          { kind: "end", text: "Al final, de media 3 parejas o menos sin casa (últimos 10 años)",
+            test: w => avgLast(w, "noHouse", 10) <= 3, value: w => fmt(avgLast(w, "noHouse", 10)) },
           { kind: "end", text: "Al final, 45 habitantes o más", test: w => I.alive(w).length >= 45,
             value: w => fmt0(I.alive(w).length) },
         ] },
@@ -247,6 +259,42 @@ const SCENARIOS = [
       <p>En tu partida: <b>${w.mortgagesGranted}</b> hipotecas concedidas; denegadas
       <b>${w.deniedCantPay || 0}</b> porque la pareja no podía pagar y <b>${w.deniedNoFunds || 0}</b>
       porque el banco no tenía ahorro.</p>`,
+  },
+  {
+    id: "central", icon: "🏛️", title: "El banco central", lesson: "Tipos de interés contra la inflación",
+    level: "Reto",
+    intro: `El gobierno anterior <b>imprimió caracolas sin control</b>: cada familia tiene el
+      triple de dinero… pero el mar da el mismo pescado. Los precios están a punto de
+      dispararse. Tú diriges el <b>banco central</b> y solo tienes una herramienta: el
+      <b>tipo de interés</b>.`,
+    setup: { children: 4, adults: 10, olds: 2, stableClimate: true, moneyMult: 3, policy: { interest: 3 } },
+    controls: ["interest"],
+    kpis: ["inflation", "bankMoney", "price", "pop"],
+    chart: [["inflationYear", "Inflación % al año", "#d8544f"], ["money", "Dinero en la calle", "#e6a817"], ["pop", "Población", "#1f7a8c"]],
+    phases: [
+      { type: "goal", years: 40, text: "Durante <b>40 años</b>, mantén la inflación a raya… sin hundir la economía.",
+        conds: [
+          { kind: "always", from: 12, text: "Desde el año 12, la inflación nunca pasa del 5% al año",
+            test: w => ((w.stats || {}).inflationYear || 0) <= 5, value: w => `${inflTxt(w)}`,
+            fail: "La inflación se ha desbocado: los precios suben más de un 5% al año." },
+          { kind: "end", text: "Al final, 25 habitantes o más (no hundas la economía)", test: w => I.alive(w).length >= 25,
+            value: w => fmt0(I.alive(w).length) },
+        ] },
+    ],
+    conclusion: (w, m) => `
+      ${m.status === "won" ? "<p>¡Inflación controlada!</p>" : ""}
+      <p>Cuando hay demasiado dinero para el pescado que existe, los precios suben. El banco
+      central no puede «desimprimir» ese dinero, pero puede hacer que <b>no se gaste</b>:</p>
+      <ul>
+        <li><b>Subir los tipos</b>: ahorrar en el banco paga más, así que las familias meten allí
+          sus caracolas en vez de gastarlas. Hay menos dinero en la calle y los precios se enfrían.
+          Pero las hipotecas son más caras: se forman menos familias y nacen menos niños.</li>
+        <li><b>Bajarlos demasiado pronto</b>: el dinero guardado vuelve a la calle de golpe y la
+          inflación rebrota.</li>
+      </ul>
+      <p>Así trabajan los bancos centrales de verdad: buscan el tipo justo para frenar los
+      precios sin ahogar la economía. Por eso se dice que la inflación es, sobre todo, un
+      fenómeno <b>monetario</b>: trabajar más ayuda, pero despacio.</p>`,
   },
   {
     id: "free", icon: "🧭", title: "Isla libre", lesson: "Todas las medidas a la vez",

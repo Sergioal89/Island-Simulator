@@ -24,6 +24,7 @@ medidas.
 | 🎣 El mar | Reto | Cuota de pesca | Tragedia de los comunes |
 | 👴 Las pensiones | Reto | Pensión, impuesto, jubilación | Envejecimiento: ninguna medida sola basta |
 | 🏦 El banco | Reto | Tipo de interés | Muy alto: no pueden pagar la hipoteca. Muy bajo: nadie presta sus ahorros |
+| 🏛️ El banco central | Reto | Tipo de interés | Subir los tipos frena la inflación (pero también la economía); bajarlos pronto la reaviva |
 | 🧭 Isla libre | Sandbox | Todos | Todo a la vez, con clima real |
 
 Al terminar cada escenario se explica qué ha pasado, con los números de tu
@@ -54,7 +55,7 @@ Y abre <http://localhost:8123>.
   - 🏠 **Casa**: lo normal.
   - 🏰 **Mansión**: su dinero les da para 15 años o más sin trabajar. Si hay
     inflación, sus ahorros valen menos y la mansión puede volver a ser casa.
-- **📈 Mercados**: precio del pescado (con inflación de los últimos 10 años), lo
+- **📈 Mercados**: precio del pescado (con la inflación en % al año, media de 10 años), lo
   que se quiere comprar frente a lo que hay en la lonja, precio de la vivienda,
   dinero en la calle y el banco.
 - **💚 Bienestar**: medidores de **poder adquisitivo y pobreza**, todos medidos
@@ -74,7 +75,7 @@ Y abre <http://localhost:8123>.
 | 💰 Pensión / 🧺 Renta universal | Se pagan del tesoro | Financiar con impuestos no genera inflación |
 | 🖨️ Imprimir dinero | Si el tesoro no llega, se imprime (si no, se recorta) | Imprimir → **inflación** |
 | ♻️ Repartir el superávit | El tesoro reparte lo que le sobra | Dinero parado → **deflación** |
-| 🏦 Tipo de interés | Lo pagan los hipotecados, lo cobran los ahorradores | Muy alto → no pueden pagar la casa; muy bajo → nadie presta sus ahorros |
+| 🏦 Tipo de interés | Lo pagan los hipotecados, lo cobran los ahorradores | Alto → se ahorra en vez de gastar (menos inflación) pero no se pueden pagar casas; bajo → se gasta más y nadie presta |
 | 🎣 Cuota de pesca | Máximo que se puede pescar al año | Tragedia de los comunes: sin cuota, el mar colapsa |
 | 👴 Edad de jubilación | A partir de ella no se produce | Menos trabajadores → más hambre |
 | 👩‍🏭 Mujer trabajadora | Si no, marisquea para casa | Menos producción, más natalidad |
@@ -100,13 +101,16 @@ Y abre <http://localhost:8123>.
   inmigrantes). Lo demás lo mueve de unos bolsillos a otros.
 - El **tesoro** cobra impuestos, vende viviendas públicas y recibe las herencias
   sin heredero. Paga pensiones, renta universal y la obra pública.
-- El **banco** presta los **ahorros de las familias** a las parejas que compran
-  casa: es un intermediario, no crea dinero. Solo concede hipotecas que la
+- El **banco** guarda los **depósitos** de las familias y los presta como
+  hipotecas: es un intermediario, no crea dinero. Solo concede hipotecas que la
   pareja pueda pagar. Si un hipotecado muere y la venta de su casa no cubre la
   deuda, los ahorradores pierden esa parte.
-- Los ahorradores **deciden cuánto prestar según el interés**: al 0% guardan su
-  dinero en casa y el banco no tiene qué prestar; a partir del 6% prestan todo
-  lo que les sobra.
+- **Política monetaria**: cada año las familias deciden cuánto de lo que les
+  sobra meten en el banco según el tipo de interés (al 0% nada, a partir del 8%
+  todo; los depósitos se mueven poco a poco). Lo que está en el banco **sin
+  prestar no se gasta**: con tipos altos hay menos dinero en la calle y quien
+  tiene ahorros gasta menos, así que los precios se enfrían. Con tipos bajos
+  pasa lo contrario. El tipo «normal» es el 5%.
 - 🎩 **Rentistas**: una familia cuyo dinero le da para 15 años de comida deja de
   trabajar y vive de sus ahorros y de los intereses del banco (solo si en la lonja
   sobra pescado, porque tiene que comprarlo todo). Si su colchón baja de 8 años o
@@ -132,6 +136,8 @@ Y abre <http://localhost:8123>.
   no crea pescado: la riqueza real no sube.
 - **Inflación por escasez**: una sequía o un mar esquilmado suben el precio sin
   que nadie imprima.
+- **Política monetaria**: subir los tipos frena la inflación, pero también las
+  hipotecas y la natalidad. Bajarlos demasiado pronto la reaviva.
 - **Deflación**: si el tesoro acumula sin gastar, falta dinero en la calle.
 - **Trampa maltusiana**: si la producción no crece, la población crece hasta el
   límite de la comida y la pobreza persiste. Las ayudas reparten la riqueza,

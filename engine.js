@@ -53,6 +53,12 @@ const CFG = {
   RESERVE_YEARS: 3,      // ahorro que una familia quiere tener antes de gastar en caprichos
   LEND_RESERVE_YEARS: 1, // ahorro mínimo (en años de comida) que no se presta ni se usa para pagar la hipoteca
   SPEND_RICH: 0.10,      // fracción del ahorro SOBRANTE que se gasta al año en pescado extra
+  // Política monetaria: con el tipo de interés NEUTRAL se gasta lo normal; cada
+  // RATE_SPEND_STEP puntos por encima, quien tiene ahorros gasta la mitad (prefiere
+  // ahorrar y cobrar intereses); por debajo, gasta más. Así el tipo enfría o
+  // calienta la demanda, y con ella los precios.
+  NEUTRAL_RATE: 5,
+  RATE_SPEND_STEP: 3,
 
   // Inmigración: ahorro que trae cada recién llegado (en pescados)
   IMMIGRANT_SAVINGS_FISH: 5,
@@ -67,8 +73,9 @@ const CFG = {
   HOUSE_ADJUST: 0.15,
   LOAN_TERM: 25,         // años para amortizar una hipoteca
   LOAN_INCOME_SHARE: 0.5,// parte del excedente de la pareja que el banco acepta como cuota
-  SAVER_FULL_RATE: 6,    // con este interés (%) o más, los ahorradores prestan todo su sobrante; con 0%, nada
-  SAVER_CURVE: 3,        // >1: con intereses bajos se presta mucho menos (al 3%, solo un 12%)
+  SAVER_FULL_RATE: 8,    // con este interés (%) o más, las familias meten en el banco todo lo que les sobra; con 0%, nada
+  SAVER_CURVE: 1,        // proporcional: al 4%, la mitad de lo que les sobra
+  DEPOSIT_ADJUST: 0.5,   // cada año los depósitos se mueven la mitad del camino hacia lo deseado (nadie vacía la cuenta de golpe)
   // Rentistas: una familia con ahorros para muchos años deja de trabajar y vive
   // de sus ahorros y de los intereses del banco. Si el colchón baja, vuelve al tajo.
   RENTIER_YEARS: 15,     // años de comida ahorrados (en dinero) para dejar de trabajar
@@ -165,55 +172,82 @@ function childHouseholds(w, hh) {
 }
 
 // ---------------------------------------------------------------------------
-// Banco: intermediario del ahorro. Presta los ahorros sobrantes de las familias
-// (que pasan a ser DEPÓSITOS) a las parejas que compran casa. Los intereses y
-// las cuotas de los hipotecados vuelven a los ahorradores. No crea dinero.
+// Banco: guarda los DEPÓSITOS de las familias y los presta como hipotecas.
+// - Cada año, cada familia decide cuánto de lo que le sobra (por encima de un
+//   año de comida) mete en el banco, según el tipo de interés: al 0% nada, a
+//   partir de SAVER_FULL_RATE todo. Si los tipos bajan o le hace falta, lo saca.
+// - Lo que está en el banco SIN PRESTAR sale de la calle: no se gasta. Por eso
+//   subir los tipos enfría la demanda y los precios (y bajarlos la calienta).
+// - Los intereses los pagan los hipotecados y los cobran los ahorradores.
+//   El banco no crea dinero.
 // ---------------------------------------------------------------------------
-function spareOf(w, hh, price) {
-  return Math.max(0, hh.wallet - CFG.LEND_RESERVE_YEARS * familyNeed(w, hh) * price);
-}
 function totalDeposits(w) {
   return w.households.reduce((s, h) => s + (h.deposit || 0), 0) + (w.treasuryDeposit || 0);
 }
-// Qué parte de su ahorro sobrante están dispuestas a prestar las familias: si el
-// banco no paga intereses, prefieren guardarlo en casa; cuanto más paga, más prestan.
+// Préstamos vivos: hipotecas de las familias + deudas de difuntos pendientes de cobrar
+function outstandingLoans(w) {
+  return w.households.reduce((s, h) => s + (h.debt || 0), 0) +
+    w.houses.reduce((s, h) => s + (h.pendingDebt || 0), 0);
+}
+// Dinero que el banco tiene guardado sin prestar (fuera de la calle)
+function bankReserves(w) {
+  return Math.max(0, totalDeposits(w) - outstandingLoans(w));
+}
+// Política monetaria: cuánto gastan en caprichos quienes tienen ahorros, según el
+// tipo de interés. Al tipo neutral, lo normal (×1); cada RATE_SPEND_STEP puntos
+// más, la mitad (compensa ahorrar); cada RATE_SPEND_STEP puntos menos, el doble.
+function spendFactor(w) {
+  const k = Math.pow(2, (CFG.NEUTRAL_RATE - w.policy.interest) / CFG.RATE_SPEND_STEP);
+  return Math.max(0.15, Math.min(2.5, k));
+}
+
+// Qué parte de su ahorro sobrante quieren tener las familias en el banco: si no
+// paga intereses, prefieren guardarlo en casa; cuanto más paga, más depositan.
 function lendWillingness(w) {
   const x = Math.max(0, Math.min(1, w.policy.interest / CFG.SAVER_FULL_RATE));
   return Math.pow(x, CFG.SAVER_CURVE);
 }
-// Ahorro que las familias ofrecen al banco ahora mismo
-function lendableSavings(w, price) {
+// Cada familia ajusta sus depósitos a lo que quiere tener en el banco. Primero
+// se ingresa y después se retira (solo hasta lo que el banco tiene sin prestar).
+function rebalanceDeposits(w) {
   const k = lendWillingness(w);
-  return w.households.reduce((s, h) => s + spareOf(w, h, price) * k, 0);
-}
-// Reúne `amount` caracolas del ahorro que las familias quieren prestar (proporcional).
-function fundLoan(w, amount, price) {
-  const k = lendWillingness(w);
-  const lenders = w.households.map(h => ({ h, s: spareOf(w, h, price) * k })).filter(x => x.s > 0);
-  const total = lenders.reduce((a, x) => a + x.s, 0);
-  if (total < amount) return false;
-  for (const x of lenders) {
-    const take = amount * x.s / total;
-    x.h.wallet -= take; x.h.deposit = (x.h.deposit || 0) + take;
+  const price = w.priceFish;
+  const out = [];
+  let outTotal = 0;
+  for (const hh of w.households) {
+    const keep = CFG.LEND_RESERVE_YEARS * familyNeed(w, hh) * price; // efectivo para comer este año
+    const d = hh.deposit || 0;
+    const target = k * Math.max(0, hh.wallet + d - keep);
+    const move = (target - d) * CFG.DEPOSIT_ADJUST;
+    // pero si no le llega el efectivo para comer este año, saca lo que necesite
+    const urgent = Math.max(0, Math.min(d, keep - hh.wallet));
+    if (move > 0 && urgent <= 0) { hh.wallet -= move; hh.deposit = d + move; }
+    else { const amt = Math.max(-move, urgent); if (amt > 1e-9) { out.push({ hh, amt }); outTotal += amt; } }
   }
-  return true;
+  // el tesoro no ahorra en el banco: retira lo que le llegó de herencias
+  if (w.treasuryDeposit > 0) { out.push({ hh: null, amt: w.treasuryDeposit }); outTotal += w.treasuryDeposit; }
+  const f = outTotal > 0 ? Math.min(1, bankReserves(w) / outTotal) : 0;
+  for (const x of out) {
+    const a = x.amt * f;
+    if (x.hh) { x.hh.deposit -= a; x.hh.wallet += a; }
+    else { w.treasuryDeposit -= a; w.treasury += a; }
+  }
 }
-// Reparte intereses y devolución de principal entre los ahorradores.
-function payDepositors(w, interest, principal) {
+// ¿Tiene el banco ahorro sin prestar para una hipoteca de `amount`?
+function fundLoan(w, amount) {
+  return bankReserves(w) >= amount;
+}
+// Reparte entre los ahorradores los intereses cobrados. El principal devuelto
+// vuelve a la caja del banco (los depósitos siguen siendo de sus dueños).
+function payDepositors(w, interest) {
   const tot = totalDeposits(w);
-  if (tot <= 1e-9) { w.treasury += interest + principal; return; }
+  if (interest <= 0) return;
+  if (tot <= 1e-9) { w.treasury += interest; return; }
   for (const h of w.households) {
     const d = h.deposit || 0;
-    if (d <= 0) continue;
-    const sh = d / tot;
-    h.wallet += (interest + principal) * sh;
-    h.deposit = Math.max(0, d - principal * sh);
+    if (d > 0) h.wallet += interest * d / tot;
   }
-  if (w.treasuryDeposit > 0) {
-    const sh = w.treasuryDeposit / tot;
-    w.treasury += (interest + principal) * sh;
-    w.treasuryDeposit = Math.max(0, w.treasuryDeposit - principal * sh);
-  }
+  if (w.treasuryDeposit > 0) w.treasury += interest * w.treasuryDeposit / tot;
 }
 // Patrimonio neto de un hogar (dinero + ahorro en el banco − hipoteca), en caracolas
 function netWorth(hh) {
@@ -337,7 +371,7 @@ function newWorld(setup) {
     marketD: 0, marketS: 0,              // demanda y oferta de pescado del último año
     policy: {
       pension: 1, ubi: 0, tax: 15, allowPrint: false, quota: 8, shareSurplus: true,
-      buildersPct: 0.6, interest: 4, retireAge: CFG.ADULT_MAX_AGE, womenWork: true,
+      buildersPct: 0.6, interest: 5, retireAge: CFG.ADULT_MAX_AGE, womenWork: true,
     },
     treasury: CFG.START_TREASURY, // tesoro público (impuestos, ventas de casas públicas, herencias vacantes)
     treasuryDeposit: 0,   // ahorro del tesoro prestado al banco (de herencias vacantes)
@@ -425,6 +459,8 @@ function newWorld(setup) {
   if (cfg.seaFrac != null) w.seaFish = CFG.SEA_CAPACITY * cfg.seaFrac;
   if (cfg.treasury != null) w.treasury = cfg.treasury;
   if (cfg.stableClimate) w.stableClimate = true;
+  // choque monetario: alguien imprimió dinero antes de empezar (más caracolas, mismo pescado)
+  if (cfg.moneyMult) for (const hh of w.households) hh.wallet *= cfg.moneyMult;
 
   computeStats(w, { hungerDeaths: 0, hungry: 0, taxes: 0, printed: 0, fromTreasury: 0 });
   return w;
@@ -635,6 +671,11 @@ function step(w) {
     }
   }
 
+  // --- 6b. Banco: cada familia decide cuánto ahorro tiene en el banco ---------
+  // (según el tipo de interés). Lo que no está prestado no se gasta: con tipos
+  // altos hay menos dinero en la calle y la demanda se enfría.
+  rebalanceDeposits(w);
+
   // --- 7. Mercado del pescado: autoabastecimiento + oferta y demanda --------
   const pPrev = w.priceFish;
   const reserveOf = hh => CFG.RESERVE_YEARS * hh._need * pPrev;
@@ -668,15 +709,16 @@ function step(w) {
   // 7.3 OFERTA (excedente de hoy + lo que queda en la lonja) y DEMANDA (lo que
   //     falta a las familias + consumo extra de quien tiene ahorros de sobra)
   w.fishStock += totalSurplus;
-  const S = w.fishStock;
   let D = 0, needQ = 0;
+  const spendK = spendFactor(w);  // el tipo de interés anima o frena el gasto de los ahorradores
   for (const hh of w.households) {
     const spare = Math.max(0, hh.wallet - reserveOf(hh));
-    hh._extra = spare * CFG.SPEND_RICH / pPrev;
+    hh._extra = spare * CFG.SPEND_RICH * spendK / pPrev;
     D += Math.min(hh._deficit + hh._extra, hh.wallet / pPrev);
     needQ += hh._deficit + hh._extra;
   }
   w.marketNeed = needQ;
+  const S = w.fishStock;
   // 7.4 el precio sube si se quiere comprar más de lo que hay, y baja si sobra
   const ratio = S > 0.01 ? D / S : (D > 0 ? 4 : 1);
   const factor = clamp(Math.pow(ratio, 0.4), 1 - CFG.PRICE_MAX_STEP, 1 + CFG.PRICE_MAX_STEP);
@@ -743,7 +785,7 @@ function step(w) {
     const principal = Math.min(avail, hh.debt / CFG.LOAN_TERM, hh.debt);
     hh.wallet -= principal; hh.debt -= principal; paidP += principal;
   }
-  payDepositors(w, paidI, paidP);
+  payDepositors(w, paidI);
   w.bankInterest += paidI; w.bankRepaid += paidP;
   w.flows.interest += paidI; w.flows.bankRepaid += paidP;
 
@@ -764,7 +806,7 @@ function step(w) {
 
   // --- 12. Indicadores y histórico -----------------------------------------
   computeStats(w, T);
-  w.lendable = lendableSavings(w, w.priceFish);
+  w.lendable = bankReserves(w);
   const s = w.stats;
   w.history.push({
     day: w.day,
@@ -784,6 +826,8 @@ function step(w) {
     pensionReal: w.policy.pension / w.priceFish,
     noHouse: w.households.filter(h => !h.houseId && h.fatherId && h.motherId).length,
     lendable: w.lendable,
+    inflationYear: s.inflationYear,
+    interest: w.policy.interest,
     rentiers: alive(w).filter(p => stage(p) === "adult" && (hhOf(w, p) || {}).rentier).length,
     ...tierCounts(w),
     olds: alive(w).filter(p => stage(p) === "old").length,
@@ -828,7 +872,7 @@ function computeStats(w, T) {
     if (!mem.length) continue;
     const def = hh._deficit || 0;
     const hungry = mem.some(m => m.hungryYears > 0);
-    if (hungry || (def > 0.01 && hh.wallet < CFG.RESERVE_YEARS * def * price)) poor += mem.length;
+    if (hungry || (def > 0.01 && hh.wallet + (hh.deposit || 0) < CFG.RESERVE_YEARS * def * price)) poor += mem.length;
   }
   w.hungerLog.push(T.hungerDeaths);
   if (w.hungerLog.length > 10) w.hungerLog.shift();
@@ -844,6 +888,8 @@ function computeStats(w, T) {
     hungerDeaths10: w.hungerLog.reduce((a, b) => a + b, 0),
     births10: w.birthLog.reduce((a, b) => a + b, 0),
     inflation10: back ? ((price / back) - 1) * 100 : 0,
+    // inflación «como en las noticias»: % al año (media de los últimos 10 años)
+    inflationYear: back ? (Math.pow(price / back, 1 / 10) - 1) * 100 : 0,
     taxes: T.taxes, printed: T.printed, fromTreasury: T.fromTreasury,
   };
 }
@@ -933,7 +979,7 @@ function buyHouse(w, hh) {
     w.mortgagesDenied++; w.deniedCantPay++;
     return false;
   }
-  if (!fundLoan(w, w.priceHouse, w.priceFish)) {
+  if (!fundLoan(w, w.priceHouse)) {
     w.mortgagesDenied++; w.deniedNoFunds++;
     return false;
   }
@@ -944,7 +990,7 @@ function buyHouse(w, hh) {
   const pending = house.pendingDebt || 0;
   const settle = Math.min(proceeds, pending);
   proceeds -= settle;
-  if (settle > 0) { payDepositors(w, 0, settle); w.bankRepaid += settle; w.flows.bankRepaid += settle; }
+  if (settle > 0) { w.bankRepaid += settle; w.flows.bankRepaid += settle; }
   if (pending > settle) writeOff(w, pending - settle);
   const sellers = (house.sellerIds || []).map(id => w.households.find(h => h.id === id)).filter(Boolean);
   if (sellers.length) for (const s of sellers) s.wallet += proceeds / sellers.length;
@@ -1042,14 +1088,14 @@ function births(w) {
     if (mom.age < CFG.CHILD_MAX_AGE || mom.age >= CFG.FERTILE_MAX_AGE) continue;
     if (dad.age < CFG.CHILD_MAX_AGE) continue;
     if (w.day - mom.lastBirthDay < CFG.BIRTH_COOLDOWN) continue;
-    if (hh.wallet < 3 * price) continue;
+    if (hh.wallet + (hh.deposit || 0) < 3 * price) continue; // cuenta también lo ahorrado en el banco
     const members = livingMembers(w, hh);
     if (members.some(m => m.hungryYears > 0)) continue;
     const famNeed = Math.max(1, members.reduce((s, m) => s + need(m), 0));
     // un hogar POBRE (no se alimenta solo y no tiene ahorro para cubrirlo) no
     // se puede permitir otro hijo
     const def = hh._deficit || 0;
-    if (def > 0.01 && hh.wallet < CFG.RESERVE_YEARS * def * price) continue;
+    if (def > 0.01 && hh.wallet + (hh.deposit || 0) < CFG.RESERVE_YEARS * def * price) continue;
     // una familia que come bien y no es pobre tiene hijos; el ahorro lo hace más probable
     const savings = hh.wallet + (hh.deposit || 0);
     const prosperity = clamp(savings / (price * famNeed * CFG.PROSPERITY_YEARS), 0, 1);
@@ -1098,4 +1144,4 @@ function immigration(w) {
 }
 
 // Exportar al ámbito global (lo usa app.js)
-window.Island = { CFG, newWorld, step, stage, need, fullName, alive, totalMoney, walletOf, hhOf, setRetireAge, netWorth, yearsOfFood, wealthYears, wealthTier };
+window.Island = { CFG, newWorld, step, stage, need, fullName, alive, totalMoney, walletOf, hhOf, setRetireAge, netWorth, yearsOfFood, wealthYears, wealthTier, spendFactor };

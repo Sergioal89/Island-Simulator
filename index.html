@@ -263,11 +263,11 @@
 
       <div id="view-markets" class="view show">
         <div class="stat-grid three" style="margin-bottom:12px">
-          <div class="stat"><div class="l">Precio pescado</div><div class="v"><span id="priceFish"></span> 🐚</div><div class="s">inflación 10 años: <span id="fishInfl" class="pill flat"></span></div></div>
+          <div class="stat"><div class="l">Precio pescado</div><div class="v"><span id="priceFish"></span> 🐚</div><div class="s">inflación: <span id="fishInfl" class="pill flat"></span></div></div>
           <div class="stat"><div class="l">Lonja: demanda / oferta</div><div class="v sm" id="marketSD"></div><div class="s" id="marketHint"></div></div>
           <div class="stat"><div class="l">Precio vivienda</div><div class="v"><span id="priceHouse"></span> 🐚</div><div class="s" id="houseFish"></div></div>
           <div class="stat"><div class="l">Dinero en la calle (M)</div><div class="v" id="money"></div><div class="s">caracolas de las familias</div></div>
-          <div class="stat"><div class="l">🏦 Ahorro prestado / deuda</div><div class="v sm"><span id="bankDeposits"></span> / <span id="bankDebt"></span></div><div class="s">depósitos de ahorradores / hipotecas</div></div>
+          <div class="stat"><div class="l">🏦 Depósitos / hipotecas</div><div class="v sm"><span id="bankDeposits"></span> / <span id="bankDebt"></span></div><div class="s">sin prestar (fuera de la calle): <b id="bankIdle"></b> 🐚</div></div>
           <div class="stat"><div class="l">Hipotecas sí / no</div><div class="v sm" id="mortgages"></div><div class="s" id="mortgagesWhy"></div></div>
         </div>
         <div class="chart-legend"><span><i class="key" style="background:#d8544f"></i>Precio del pescado</span><span><i class="key" style="background:#e6a817"></i>Dinero en la calle</span></div>
@@ -360,9 +360,9 @@
 
       <div class="grp" data-grp="bank">
         <h3>Banco</h3>
-        <div class="ctl" data-ctl="interest" title="Tipo de interés anual de las hipotecas. Muy alto: las parejas no pueden pagar la cuota. Muy bajo: nadie quiere prestar sus ahorros.">
-          <label for="interest">🏦 Tipo de interés</label><input type="range" id="interest" min="0" max="20" step="0.5" value="4"><span class="val" id="interestV">4%</span>
-          <p class="hint">Lo pagan los hipotecados y lo cobran los ahorradores. Muy alto → las parejas no pueden pagar la cuota. Muy bajo → nadie quiere prestar sus ahorros y el banco no tiene dinero.</p>
+        <div class="ctl" data-ctl="interest" title="Tipo de interés del banco. Alto: la gente ahorra en el banco en vez de gastar (frena la inflación) y las hipotecas son caras. Bajo: la gente gasta más (sube la inflación) y nadie quiere prestar sus ahorros.">
+          <label for="interest">🏦 Tipo de interés</label><input type="range" id="interest" min="0" max="20" step="0.5" value="5"><span class="val" id="interestV">5%</span>
+          <p class="hint">Alto → la gente mete sus ahorros en el banco en vez de gastarlos: frena la inflación, pero las hipotecas son caras. Bajo → se gasta más (sube la inflación) y nadie quiere prestar sus ahorros. Lo normal: ~5%.</p>
         </div>
       </div>
 

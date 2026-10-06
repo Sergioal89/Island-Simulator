@@ -231,10 +231,11 @@ function render() {
 
   // --- Mercados ---
   $("priceFish").textContent = fmt(w.priceFish);
-  const infl = st.inflation10 || 0;
+  // inflación «como en las noticias»: % al año (media de los últimos 10 años)
+  const infl = st.inflationYear || 0;
   const pill = $("fishInfl");
-  pill.textContent = (infl >= 0 ? "+" : "") + infl.toFixed(0) + "%";
-  pill.className = "pill " + (infl > 3 ? "up" : (infl < -3 ? "down" : "flat"));
+  pill.textContent = (infl >= 0 ? "+" : "") + fmt(infl) + "% al año";
+  pill.className = "pill " + (infl > 3 ? "up" : (infl < -1 ? "down" : "flat"));
   const ratio = w.marketS > 0.01 ? w.marketD / w.marketS : 0;
   $("marketSD").textContent = `${fmt0(w.marketD)} / ${fmt0(w.marketS)} 🐟`;
   $("marketHint").textContent = ratio > 1.05 ? "falta pescado → el precio sube" :
@@ -244,6 +245,7 @@ function render() {
   $("money").textContent = fmt0(totalMoney(w));
   $("bankDeposits").textContent = fmt0(w.households.reduce((s, h) => s + (h.deposit || 0), 0) + (w.treasuryDeposit || 0));
   $("bankDebt").textContent = fmt0(w.households.reduce((s, h) => s + (h.debt || 0), 0));
+  $("bankIdle").textContent = fmt0(w.lendable || 0);
   $("mortgages").textContent = `${w.mortgagesGranted || 0} / ${w.mortgagesDenied || 0}`;
   $("mortgagesWhy").textContent = `denegadas: ${w.deniedCantPay || 0} no pueden pagar · ${w.deniedNoFunds || 0} sin ahorro`;
 

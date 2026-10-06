@@ -1,5 +1,7 @@
 # 🏝️ Island Simulator
 
+### ▶️ [Jugar ahora](https://sergioal89.github.io/Island-Simulator/)
+
 Un pequeño **juego-simulación económica** (PoC) sobre una isla cuya población
 tiene que prosperar. El objetivo educativo es tocar conceptos de economía
 —**inflación / deflación**, oferta y demanda, política fiscal y monetaria, banca,

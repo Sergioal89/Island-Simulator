@@ -374,6 +374,12 @@ function renderKpis() {
     return `<div class="stat ${bad ? "bad" : ""}"><div class="l">${d.label}</div><div class="v">${d.value(w)}</div>
       <div class="s">${d.sub ? d.sub(w) : ""}</div></div>`;
   }).join("");
+  // «Qué está pasando»: solo en la isla libre (en los retos daría la solución)
+  const tips = scn.free && w.day > 0 ? SC.diagnose(w) : null;
+  $("advice").innerHTML = !tips ? "" : (tips.length
+    ? `<div class="advice"><div class="ttl">🔎 Qué está pasando</div>` +
+      tips.map(t => `<div class="it"><span>${t.icon}</span><span>${t.text}</span></div>`).join("") + `</div>`
+    : `<div class="advice ok">✅ La isla va bien: sin problemas graves a la vista.</div>`);
   const h = w.history;
   if (h.length) lineChart($("chartKpi"), scn.chart.map(([key]) => h.map(d => d[key] || 0)), scn.chart.map(c => c[2]));
   else $("chartKpi").getContext("2d").clearRect(0, 0, $("chartKpi").width, $("chartKpi").height);
@@ -383,12 +389,13 @@ function renderKpis() {
 function closeModals() { $("scnModal").classList.add("hidden"); $("resultModal").classList.add("hidden"); }
 function showScenarioPicker() {
   const done = store.get("done", []);
+  const best = store.get("best", {});
   $("scnGrid").innerHTML = SC.SCENARIOS.map(s => `
     <button class="scn" data-id="${s.id}">
       <span class="ic">${s.icon}</span>
       <span class="t">${s.title}</span>
       <span class="le">${s.lesson}</span>
-      <span class="lv"><span>${s.level}</span>${done.includes(s.id) ? `<span class="ok">✔ superado</span>` : ""}</span>
+      <span class="lv"><span>${s.level}</span>${best[s.id] != null ? `<span class="ok">🏆 ${best[s.id]}</span>` : (done.includes(s.id) ? `<span class="ok">✔ superado</span>` : "")}</span>
     </button>`).join("");
   $("scnGrid").querySelectorAll(".scn").forEach(b => { b.onclick = () => startScenario(b.dataset.id); });
   $("scnModal").classList.remove("hidden");
@@ -415,7 +422,31 @@ function showResult() {
   $("rRetry").onclick = () => startScenario(scn.id);
   $("rMenu").onclick = () => { closeModals(); showScenarioPicker(); };
   $("rStay").onclick = closeModals;
+  renderScoreBox();
   $("resultModal").classList.remove("hidden");
+}
+
+// --- Puntuación y récords personales (en este navegador) ---------------------
+// Los retos dan de 0 a 1000 puntos al ganarlos; se guarda el mejor de cada uno.
+function renderScoreBox() {
+  const box = $("rScore");
+  const m = world.mission;
+  if (!m || m.status !== "won" || !scn.score) { box.innerHTML = ""; return; }
+  const score = scn.score(world, m);
+  const best = store.get("best", {});
+  const prev = best[scn.id];
+  // el récord se guarda una sola vez por partida (no al reabrir la lección)
+  if (!m.scored && !viewingPast()) {
+    m.scored = true;
+    m.newRecord = prev == null || score > prev;
+    if (liveWorld.mission) Object.assign(liveWorld.mission, { scored: true, newRecord: m.newRecord });
+    if (m.newRecord) store.set("best", { ...best, [scn.id]: score });
+  }
+  const isRecord = !!m.newRecord;
+  box.innerHTML = `<div class="score-box">
+    Tu puntuación: <span class="big-score">${score}</span> / 1000
+    ${isRecord ? ` · <span class="record">🏆 ¡Nuevo récord!</span>` : ` · tu récord: <b>${prev}</b>`}
+    <div class="hint">${esc(scn.scoreInfo || "")}</div></div>`;
 }
 
 // --- Isla (SVG) -------------------------------------------------------------

@@ -170,6 +170,15 @@
   table.cmp th, table.cmp td{ padding:5px 6px; border-bottom:1px solid var(--line); text-align:right; }
   table.cmp th:first-child, table.cmp td:first-child{ text-align:left; }
   table.cmp small{ color:var(--red); font-weight:700; }
+  /* Qué está pasando (avisos de la isla libre) */
+  .advice{ margin-top:10px; border-radius:10px; background:#fff7e0; padding:8px 12px; font-size:13px; line-height:1.45; }
+  .advice .ttl{ font-size:11px; font-weight:800; color:#a07400; text-transform:uppercase; letter-spacing:.5px; margin-bottom:2px; }
+  .advice .it{ display:flex; gap:8px; padding:3px 0; }
+  .advice.ok{ background:#e3f5e6; color:#22702e; }
+  /* Puntuación y récords */
+  .score-box{ margin-top:14px; padding:12px; border-radius:10px; background:var(--panel2); font-size:13px; }
+  .big-score{ font-size:26px; font-weight:800; color:var(--accent); }
+  .record{ color:#a07400; font-weight:800; }
 </style>
 </head>
 <body>
@@ -220,6 +229,7 @@
       <h2 class="row"><span class="grow">📌 Indicadores clave</span>
         <label class="toggle" id="showAllWrap"><input type="checkbox" id="showAll"> 🔬 Ver todos los datos</label></h2>
       <div class="stat-grid four" id="kpis"></div>
+      <div id="advice"></div>
       <div class="chart-legend" id="kpiLegend"></div>
       <canvas id="chartKpi" class="chart tall"></canvas>
       <p class="hint">Cada línea tiene su propia escala: fíjate en si sube o baja.</p>
@@ -337,7 +347,7 @@
       <div class="grp" data-grp="fiscal">
         <h3>Impuestos y ayudas</h3>
         <div class="ctl" data-ctl="tax" title="Impuesto sobre las ventas de la lonja. Lo que se recauda va al tesoro, que paga pensiones, ayudas y obra pública.">
-          <label for="tax">🧾 Impuesto lonja</label><input type="range" id="tax" min="0" max="50" step="1" value="15"><span class="val" id="taxV">15%</span>
+          <label for="tax">🧾 Impuesto lonja</label><input type="range" id="tax" min="0" max="50" step="1" value="20"><span class="val" id="taxV">20%</span>
           <p class="hint">Lo que se recauda va al tesoro, que paga pensiones, ayudas y obra pública.</p>
         </div>
         <div class="ctl" data-ctl="pension" title="Caracolas al año que cobra cada viejo, pagadas por el tesoro.">
@@ -448,6 +458,7 @@
     <h2 id="rTitle"></h2>
     <p class="sub" id="rSub"></p>
     <div class="body" id="rBody"></div>
+    <div id="rScore"></div>
     <div class="m-actions" id="rActions"></div>
   </div>
 </div>

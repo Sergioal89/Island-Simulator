@@ -68,6 +68,9 @@ Y abre <http://localhost:8123>.
   - Tasa de pobreza y muertes por hambre en los últimos 10 años.
 - **📊 Pirámide**, **🌳 Árbol genealógico** y **👥 Habitantes**.
 - **🏛️ Tesoro público**: ingresos y gastos del año.
+- **🔎 Qué está pasando** (isla libre): avisa de los problemas de la isla, su causa
+  y qué medida podría arreglarlos (un tesoro que acapara el dinero, parejas sin
+  casa por falta de ahorro o de casas, inflación, deflación, mar agotado…).
 
 ## Medidas del gobierno
 
@@ -103,6 +106,9 @@ Y abre <http://localhost:8123>.
   inmigrantes). Lo demás lo mueve de unos bolsillos a otros.
 - El **tesoro** cobra impuestos, vende viviendas públicas y recibe las herencias
   sin heredero. Paga pensiones, renta universal y la obra pública.
+  Primero reserva lo de las pensiones y la renta universal del año; la obra
+  pública solo se paga con lo que sobre. Si no reparte su superávit, el dinero
+  se queda parado en el tesoro: deflación, y el banco se queda sin ahorro.
 - El **banco** guarda los **depósitos** de las familias y los presta como
   hipotecas: es un intermediario, no crea dinero. Solo concede hipotecas que la
   pareja pueda pagar. Si un hipotecado muere y la venta de su casa no cubre la
@@ -145,6 +151,14 @@ Y abre <http://localhost:8123>.
   límite de la comida y la pobreza persiste. Las ayudas reparten la riqueza,
   pero no la crean.
 - **Tragedia de los comunes**: sin cuota de pesca, el mar se agota.
+
+## 🏆 Puntuación y récords
+
+Los retos (el mar, las pensiones, el banco y el banco central) dan al ganarlos
+una puntuación de 0 a 1000 que premia jugar *bien*, no solo ganar: por ejemplo,
+en el mar suma tener el mar sano y la isla poblada, y resta el hambre. El mejor
+resultado de cada reto se guarda en el navegador y aparece en el menú de
+escenarios.
 
 ## Estructura del código
 

@@ -16,6 +16,9 @@ const ages = w => {
   const living = I.alive(w);
   return { adults: living.filter(p => I.stage(p) === "adult").length, olds: living.filter(p => I.stage(p) === "old").length };
 };
+// años jugados del reto (histórico desde que empezó la misión)
+const during = (w, m) => w.history.filter(d => d.day > (m.marks.start ? m.marks.start.day : 0));
+const clampScore = v => Math.max(0, Math.min(1000, Math.round(v)));
 const seaPct = w => (w.seaFish / I.CFG.SEA_CAPACITY) * 100;
 const fmt = n => (Math.round(n * 10) / 10).toLocaleString("es-ES");
 const fmt0 = n => Math.round(n).toLocaleString("es-ES");
@@ -154,6 +157,8 @@ const SCENARIOS = [
   },
   {
     id: "sea", icon: "🎣", title: "El mar", lesson: "La tragedia de los comunes",
+    scoreInfo: "8 por cada % de mar sano + 3 por habitante − 25 por cada muerte por hambre (10 años)",
+    score: w => clampScore(8 * seaPct(w) + 3 * I.alive(w).length - 25 * ((w.stats || {}).hungerDeaths10 || 0)),
     level: "Reto",
     intro: `El mar es de todos. Los pescadores pueden sacar hasta el <b>30%</b> de los peces
       cada año y hay comida de sobra… por ahora. Pero los peces necesitan tiempo para
@@ -189,6 +194,12 @@ const SCENARIOS = [
   },
   {
     id: "pensions", icon: "👴", title: "Las pensiones", lesson: "Envejecimiento y gasto público",
+    scoreInfo: "150 por caracola de pensión + menos recortes, más habitantes e impuestos más bajos suman",
+    score: (w, m) => {
+      const h = during(w, m);
+      const avgCut = h.length ? h.reduce((a, d) => a + (d.welfareCut || 0), 0) / h.length : 0;
+      return clampScore(150 * w.policy.pension + 3 * (100 - avgCut) + 4 * I.alive(w).length + 4 * (50 - w.policy.tax));
+    },
     level: "Reto",
     intro: `La isla está <b>envejecida</b>: hay más viejos que adultos trabajando. Las
       pensiones se pagan con los <b>impuestos</b> de la lonja, y el tesoro está casi vacío.`,
@@ -222,6 +233,8 @@ const SCENARIOS = [
   },
   {
     id: "bank", icon: "🏦", title: "El banco", lesson: "Tipos de interés, vivienda y natalidad",
+    scoreInfo: "8 por habitante + 5 por hipoteca concedida − 80 por cada pareja sin casa (media 10 años)",
+    score: w => clampScore(8 * I.alive(w).length + 5 * (w.mortgagesGranted || 0) - 80 * avgLast(w, "noHouse", 10)),
     level: "Reto",
     intro: `Una isla <b>joven</b>: muchos niños que pronto querrán casarse y tener casa propia.
       Para comprarla piden una <b>hipoteca</b> al banco. Pero el banco no tiene dinero
@@ -262,6 +275,12 @@ const SCENARIOS = [
   },
   {
     id: "central", icon: "🏛️", title: "El banco central", lesson: "Tipos de interés contra la inflación",
+    scoreInfo: "650 − 60 por cada punto del peor año de inflación o deflación + 6 por habitante",
+    score: (w, m) => {
+      const h = during(w, m).filter(d => d.day - m.marks.start.day >= 12);
+      const peak = h.length ? Math.max(...h.map(d => Math.abs(d.inflationYear || 0))) : 0;
+      return clampScore(650 - 60 * peak + 6 * I.alive(w).length);
+    },
     level: "Reto",
     intro: `El gobierno anterior <b>imprimió caracolas sin control</b>: cada familia tiene el
       triple de dinero… pero el mar da el mismo pescado. Los precios están a punto de
@@ -308,6 +327,46 @@ const SCENARIOS = [
     phases: [],
   },
 ];
+
+// ---------------------------------------------------------------------------
+// «Qué está pasando»: diagnóstico de los problemas de la isla, con su causa y
+// qué medida podría arreglarlos (para la isla libre)
+// ---------------------------------------------------------------------------
+function diagnose(w) {
+  const out = [];
+  const s = w.stats || {};
+  const l = last(w);
+  const back = w.history.length > 10 ? w.history[w.history.length - 11] : (w.history[0] || {});
+  const wallets = I.totalMoney(w), reserves = w.lendable || 0;
+  const allMoney = wallets + reserves + Math.max(0, w.treasury);
+  // 1) el tesoro acapara el dinero
+  const tShare = allMoney > 0 ? w.treasury / allMoney : 0;
+  if (tShare > 0.3 && !w.policy.shareSurplus) {
+    out.push({ sev: 3, icon: "🏛️", text: `El tesoro guarda el <b>${Math.round(tShare * 100)}%</b> de todo el dinero y no lo devuelve: falta dinero en la calle y en el banco. Activa <b>♻️ Repartir el superávit</b> o gasta en pensiones o renta universal.` });
+  }
+  // 2) parejas sin casa: ¿por qué?
+  const noHouse = l.noHouse || 0, free = l.freeHouses || 0;
+  if (noHouse >= 2) {
+    const noFunds = (l.deniedNoFunds || 0) - (back.deniedNoFunds || 0);
+    const cantPay = (l.deniedCantPay || 0) - (back.deniedCantPay || 0);
+    if (free === 0) {
+      out.push({ sev: 2, icon: "🔨", text: `<b>${noHouse}</b> parejas viven con sus padres porque <b>no hay casas libres</b>. Las construye el tesoro: necesita dinero (impuestos) y constructores.` });
+    } else if (noFunds >= cantPay && noFunds > 0) {
+      out.push({ sev: 3, icon: "🏚️", text: `<b>${noHouse}</b> parejas sin casa aunque hay <b>${free}</b> libres: el <b>banco no tiene ahorro</b> que prestar. Sube el tipo de interés (la gente deposita más) o devuelve dinero a la calle.` });
+    } else if (cantPay > 0) {
+      out.push({ sev: 3, icon: "🏚️", text: `<b>${noHouse}</b> parejas sin casa aunque hay <b>${free}</b> libres: <b>no pueden pagar la cuota</b> de la hipoteca. Baja el tipo de interés.` });
+    }
+  }
+  // 3) precios
+  const infl = s.inflationYear || 0;
+  if (infl < -2) out.push({ sev: 2, icon: "📉", text: `<b>Deflación</b>: los precios bajan un ${fmt(-infl)}% al año. Suele pasar cuando falta dinero en la calle (un tesoro que acumula o tipos de interés muy altos).` });
+  if (infl > 5) out.push({ sev: 2, icon: "📈", text: `<b>Inflación</b> del ${fmt(infl)}% al año: hay más dinero que pescado. Sube el tipo de interés o deja de imprimir.` });
+  // 4) mar, hambre y ayudas
+  if (seaPct(w) < 40) out.push({ sev: 3, icon: "🎣", text: `El mar está al <b>${Math.round(seaPct(w))}%</b>: se pesca más de lo que se repone. Baja la cuota de pesca.` });
+  if ((s.hungerDeaths10 || 0) >= 5) out.push({ sev: 3, icon: "💀", text: `<b>${s.hungerDeaths10}</b> muertes por hambre en 10 años: falta pescado (¿mar agotado, isla en su límite?) o hay familias sin dinero para comprarlo.` });
+  if ((w.welfareCut || 0) > 20) out.push({ sev: 2, icon: "✂️", text: `Las ayudas se recortan un <b>${Math.round(w.welfareCut)}%</b>: el tesoro no llega. Sube impuestos o baja las ayudas.` });
+  return out.sort((a, b) => b.sev - a.sev).slice(0, 3);
+}
 
 // ---------------------------------------------------------------------------
 // Motor de misiones: el estado vive en w.mission (se guarda con el histórico)
@@ -380,5 +439,5 @@ function progress(scn, w) {
   return { frac: 0, label: "" };
 }
 
-window.Scenarios = { SCENARIOS, KPIS, start, update, progress, snapshot, byId: id => SCENARIOS.find(s => s.id === id) };
+window.Scenarios = { SCENARIOS, KPIS, start, update, progress, snapshot, diagnose, byId: id => SCENARIOS.find(s => s.id === id) };
 })();

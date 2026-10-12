@@ -69,9 +69,9 @@ const CFG = {
 
   // Vivienda y banco
   HOUSE_BUILD_YEARS: 5,  // años de trabajo de 1 adulto para una casa
-  HOUSE_BASE_FISH: 30,   // valor de referencia de una casa, en pescados
+  HOUSE_BASE_FISH: 22,   // valor de referencia de una casa, en pescados
   HOUSE_ADJUST: 0.15,
-  LOAN_TERM: 25,         // años para amortizar una hipoteca
+  LOAN_TERM: 20,         // años para amortizar una hipoteca
   LOAN_INCOME_SHARE: 0.5,// parte del excedente de la pareja que el banco acepta como cuota
   SAVER_FULL_RATE: 8,    // con este interés (%) o más, las familias meten en el banco todo lo que les sobra; con 0%, nada
   SAVER_CURVE: 1,        // proporcional: al 4%, la mitad de lo que les sobra
@@ -370,7 +370,7 @@ function newWorld(setup) {
     fishWage: 0, buildWage: 0,
     marketD: 0, marketS: 0,              // demanda y oferta de pescado del último año
     policy: {
-      pension: 1, ubi: 0, tax: 15, allowPrint: false, quota: 8, shareSurplus: true,
+      pension: 1, ubi: 0, tax: 20, allowPrint: false, quota: 8, shareSurplus: true,
       buildersPct: 0.6, interest: 5, retireAge: CFG.ADULT_MAX_AGE, womenWork: true,
     },
     treasury: CFG.START_TREASURY, // tesoro público (impuestos, ventas de casas públicas, herencias vacantes)
@@ -540,8 +540,13 @@ function step(w) {
   desiredBuilders = Math.min(desiredBuilders, maxBuilders);
   // La vivienda es OBRA PÚBLICA: el tesoro paga el jornal de los constructores.
   // Si no se permite imprimir, solo se contrata a quien el tesoro puede pagar.
+  // primero se reserva lo de las pensiones y la renta universal de este año;
+  // la obra pública solo se paga con lo que sobre
+  const living0 = alive(w);
+  const welfareDue = w.policy.ubi * living0.length + w.policy.pension * living0.filter(p => stage(p) === "old").length;
   if (!w.policy.allowPrint) {
-    desiredBuilders = Math.min(desiredBuilders, Math.floor(w.treasury / Math.max(0.01, w.buildWage)));
+    const forWorks = Math.max(0, w.treasury - welfareDue);
+    desiredBuilders = Math.min(desiredBuilders, Math.floor(forWorks / Math.max(0.01, w.buildWage)));
   }
   for (const p of workers) {
     if (buildersActive.length >= desiredBuilders) break;
@@ -616,7 +621,9 @@ function step(w) {
   // que la venderá a una pareja joven.
   for (const p of buildersActive) {
     const wage = w.buildWage;
-    let paid = Math.min(w.treasury, wage);
+    // sin imprenta, la obra no toca el dinero reservado para las ayudas
+    const spendable = w.policy.allowPrint ? w.treasury : Math.max(0, w.treasury - welfareDue);
+    let paid = Math.min(spendable, wage);
     w.treasury -= paid;
     if (paid < wage - 1e-9 && w.policy.allowPrint) {
       const pr = wage - paid;
@@ -826,6 +833,9 @@ function step(w) {
     pensionReal: w.policy.pension / w.priceFish,
     noHouse: w.households.filter(h => !h.houseId && h.fatherId && h.motherId).length,
     lendable: w.lendable,
+    deniedCantPay: w.deniedCantPay || 0,
+    deniedNoFunds: w.deniedNoFunds || 0,
+    freeHouses: w.houses.filter(h => h.ownerId === null).length,
     inflationYear: s.inflationYear,
     interest: w.policy.interest,
     rentiers: alive(w).filter(p => stage(p) === "adult" && (hhOf(w, p) || {}).rentier).length,
@@ -1061,7 +1071,10 @@ function formFamilies(w) {
 // Capacidad = parte del excedente que generan dos adultos pescando (en caracolas).
 function canAffordMortgage(w, amount) {
   const earners = 1 + (w.policy.womenWork ? 1 : CFG.HOME_PRODUCTION); // él + ella
-  const surplusFish = Math.max(0, earners * (w.expCatch || CFG.BASE_CATCH) - 2 * CFG.NEED_ADULT);
+  // el banco mira lo que gana la pareja en un año NORMAL (sin la racha buena o
+  // mala del clima de este año): una hipoteca dura 25 años
+  const normalCatch = (w.expCatch || CFG.BASE_CATCH) / Math.max(0.4, w.abundance || 1);
+  const surplusFish = Math.max(0, earners * normalCatch - 2 * CFG.NEED_ADULT);
   const capacity = CFG.LOAN_INCOME_SHARE * surplusFish * w.priceFish;
   const annualPayment = amount * (w.policy.interest / 100 + 1 / CFG.LOAN_TERM);
   return annualPayment <= capacity;
